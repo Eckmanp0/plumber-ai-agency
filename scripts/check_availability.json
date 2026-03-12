@@ -1,0 +1,36 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_availability",
+    "description": "Checks booking windows based on client rules and urgency.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "description": "Agency client UUID"
+        },
+        "service_type": {
+          "type": "string"
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "emergency"]
+        },
+        "requested_date": {
+          "type": "string",
+          "description": "Preferred date in YYYY-MM-DD"
+        },
+        "requested_time": {
+          "type": "string",
+          "description": "Preferred time or time window"
+        }
+      },
+      "required": ["client_id", "service_type", "urgency"]
+    }
+  },
+  "server": {
+    "url": "https://lxkfjannfjfetfjfwuaf.supabase.co/functions/v1/vapi-tools",
+    "timeoutSeconds": 30
+  }
+}

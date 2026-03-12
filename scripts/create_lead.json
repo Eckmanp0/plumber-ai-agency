@@ -1,0 +1,53 @@
+{
+  "type": "function",
+  "function": {
+    "name": "create_lead_or_booking",
+    "description": "Creates a lead record and optionally books a calendar event for full-service tenants when scheduled_start and scheduled_end are provided.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" },
+        "caller_name": { "type": "string" },
+        "caller_phone": { "type": "string" },
+        "service_address": { "type": "string" },
+        "issue_description": { "type": "string" },
+        "service_type": { "type": "string" },
+        "urgency": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "emergency"]
+        },
+        "preferred_date": { "type": "string" },
+        "preferred_time": { "type": "string" },
+        "scheduled_start": {
+          "type": "string",
+          "description": "Selected slot start in ISO 8601 for calendar-direct bookings"
+        },
+        "scheduled_end": {
+          "type": "string",
+          "description": "Selected slot end in ISO 8601 for calendar-direct bookings"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone for the selected slot"
+        },
+        "booking_mode": {
+          "type": "string",
+          "enum": ["booked", "pending_confirmation", "callback_required"]
+        }
+      },
+      "required": [
+        "client_id",
+        "caller_name",
+        "caller_phone",
+        "issue_description",
+        "service_type",
+        "urgency",
+        "booking_mode"
+      ]
+    }
+  },
+  "server": {
+    "url": "https://lxkfjannfjfetfjfwuaf.supabase.co/functions/v1/vapi-tools",
+    "timeoutSeconds": 30
+  }
+}

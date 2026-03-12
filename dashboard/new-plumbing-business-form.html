@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Plumbing Business Form</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5e6975;
+      --paper: #f5f1e8;
+      --panel: #ffffff;
+      --line: rgba(23, 33, 43, 0.12);
+      --navy: #25344f;
+      --ember: #c45f33;
+      --harbor: #1f6f67;
+      --shadow: 0 18px 42px rgba(23, 33, 43, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(196, 95, 51, 0.10), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(31, 111, 103, 0.10), transparent 28%),
+        #f8f5ef;
+      color: var(--ink);
+    }
+
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--panel);
+      padding: 30px;
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+    }
+
+    .intro {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    fieldset {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    legend {
+      font-weight: 700;
+      padding: 0 8px;
+      color: var(--navy);
+    }
+
+    .form-group { margin-bottom: 16px; }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #cfd8df;
+      border-radius: 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .checkbox-group,
+    .radio-group {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .checkbox-item,
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: normal;
+    }
+
+    .inline-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .package-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .package-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: #fbfaf7;
+    }
+
+    .package-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--navy);
+    }
+
+    .package-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    button {
+      background: linear-gradient(135deg, var(--ember), #9a431d);
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { opacity: 0.96; }
+
+    .auth-status {
+      max-width: 920px;
+      margin: 0 auto 16px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(37, 52, 79, 0.08);
+      color: var(--navy);
+      border: 1px solid var(--line);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 760px) {
+      .inline-grid,
+      .package-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-status" id="authStatus">Checking admin access...</div>
+  <div class="container">
+    <h1>New Plumbing Business Form</h1>
+    <p class="intro">Use this form as the internal onboarding checklist for new plumbing tenants. Pilot accounts stay request-only, while full-service accounts are set up for calendar-direct booking, reminders, and follow-up automation when those features are enabled.</p>
+
+    <form action="#" method="post">
+      <fieldset>
+        <legend>Business Info</legend>
+
+        <div class="form-group">
+          <label for="businessName">Business Name</label>
+          <input type="text" id="businessName" name="businessName" required />
+        </div>
+
+        <div class="form-group">
+          <label for="ownerName">Owner Name</label>
+          <input type="text" id="ownerName" name="ownerName" required />
+        </div>
+
+        <div class="inline-grid">
+          <div class="form-group">
+            <label for="businessPhone">Business Phone</label>
+            <input type="tel" id="businessPhone" name="businessPhone" required />
+          </div>
+
+          <div class="form-group">
+            <label for="businessEmail">Business Email</label>
+            <input type="email" id="businessEmail" name="businessEmail" required />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Package Setup</legend>
+
+        <div class="form-group">
+          <label for="packageTier">Package Tier</label>
+          <select id="packageTier" name="packageTier">
+            <option value="pilot">Pilot</option>
+            <option value="full_service">Full Service</option>
+          </select>
+        </div>
+
+        <div class="package-grid">
+          <div class="package-card">
+            <strong>Pilot</strong>
+            <p>Request-only intake, lead capture, dashboards, Google Sheet reporting, and manual scheduling support.</p>
+          </div>
+          <div class="package-card">
+            <strong>Full Service</strong>
+            <p>Everything in pilot plus calendar-direct booking, reminder queue support, and full automation readiness.</p>
+          </div>
+        </div>
+
+        <div class="inline-grid" style="margin-top:16px;">
+          <div class="form-group">
+            <label for="bookingMode">Booking Mode</label>
+            <select id="bookingMode" name="bookingMode">
+              <option value="request_only">Request Only</option>
+              <option value="calendar_direct">Calendar Direct</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="googleSheetTemplateId">Google Sheet Template ID</label>
+            <input type="text" id="googleSheetTemplateId" name="googleSheetTemplateId" placeholder="Defaults to agency template if blank" />
+          </div>
+        </div>
+        <div class="note">Recommended pairing: `pilot` with `request_only`, and `full_service` with `calendar_direct` when a Google Calendar connection will be provisioned.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Service Area</legend>
+
+        <div class="form-group">
+          <label for="citiesServed">Cities Served</label>
+          <textarea id="citiesServed" name="citiesServed" placeholder="Enter cities served"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="zipCodes">ZIP Codes</label>
+          <textarea id="zipCodes" name="zipCodes" placeholder="Enter ZIP codes served"></textarea>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Services Offered</legend>
+
+        <div class="checkbox-group">
+          <label class="checkbox-item"><input type="checkbox" name="services[]" value="Drain cleaning" />Drain cleaning</label>
+          <label class="checkbox-item"><input type="checkbox" name="services[]" value="Leak repair" />Leak repair</label>
+          <label class="checkbox-item"><input type="checkbox" name="services[]" value="Water heater repair" />Water heater repair</label>
+          <label class="checkbox-item"><input type="checkbox" name="services[]" value="Sewer repair" />Sewer repair</label>
+          <label class="checkbox-item"><input type="checkbox" name="services[]" value="Fixture installation" />Fixture installation</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Scheduling</legend>
+
+        <div class="form-group">
+          <label for="operatingHours">Operating Hours</label>
+          <input type="text" id="operatingHours" name="operatingHours" placeholder="Example: Mon-Fri 8am-5pm" />
+        </div>
+
+        <div class="form-group">
+          <label>Emergency Service Available</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" name="emergencyService" value="Yes" />Yes</label>
+            <label class="radio-item"><input type="radio" name="emergencyService" value="No" />No</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Same-Day Service Allowed</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" name="sameDayService" value="Yes" />Yes</label>
+            <label class="radio-item"><input type="radio" name="sameDayService" value="No" />No</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Notifications</legend>
+
+        <div class="inline-grid">
+          <div class="form-group">
+            <label for="urgentPhone">Phone for Urgent Alerts</label>
+            <input type="tel" id="urgentPhone" name="urgentPhone" />
+          </div>
+
+          <div class="form-group">
+            <label for="reportsEmail">Email for Reports</label>
+            <input type="email" id="reportsEmail" name="reportsEmail" />
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="submit">Submit</button>
+    </form>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lxkfjannfjfetfjfwuaf.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_hmYHicDbdl4xpuo5WQ9RLQ_bu24mUdD";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const authStatusEl = document.getElementById("authStatus");
+    const containerEl = document.querySelector(".container");
+
+    containerEl.classList.add("hidden");
+
+    async function requireAgencyAdmin() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) {
+        window.location.href = "login?dest=admin";
+        return;
+      }
+
+      const { data: memberships, error } = await supabaseClient
+        .from("tenant_users")
+        .select("role")
+        .eq("role", "agency_admin")
+        .limit(1);
+
+      if (error) {
+        authStatusEl.textContent = error.message;
+        return;
+      }
+
+      if (!memberships || memberships.length === 0) {
+        window.location.href = "admin-dashboard?access=denied";
+        return;
+      }
+
+      authStatusEl.classList.add("hidden");
+      containerEl.classList.remove("hidden");
+    }
+
+    requireAgencyAdmin();
+  </script>
+</body>
+</html>

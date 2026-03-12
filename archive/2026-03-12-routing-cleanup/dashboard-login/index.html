@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agency Login</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --ink: #16221f;
+      --muted: #5f6f69;
+      --paper: #f5f1e8;
+      --panel: rgba(255, 252, 245, 0.9);
+      --line: rgba(22, 34, 31, 0.12);
+      --accent: #cc5b2d;
+      --accent-dark: #9f401b;
+      --teal: #1f6f67;
+      --shadow: 0 24px 60px rgba(22, 34, 31, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(204, 91, 45, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(31, 111, 103, 0.18), transparent 30%),
+        linear-gradient(135deg, #efe7d7 0%, #f9f6ef 45%, #efe4cf 100%);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(1024px, 100%);
+      display: grid;
+      grid-template-columns: 1.2fr 0.95fr;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: 28px;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }
+
+    .hero {
+      padding: 56px;
+      background:
+        linear-gradient(160deg, rgba(22, 34, 31, 0.96), rgba(31, 111, 103, 0.9)),
+        linear-gradient(0deg, rgba(255,255,255,0.05), rgba(255,255,255,0.05));
+      color: #fff9f2;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -80px auto;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.07);
+      filter: blur(4px);
+    }
+
+    .eyebrow {
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: rgba(255, 249, 242, 0.76);
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 4vw, 4rem);
+      line-height: 0.95;
+      margin: 0 0 18px;
+    }
+
+    .hero p {
+      max-width: 34ch;
+      color: rgba(255, 249, 242, 0.82);
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+
+    .points {
+      margin-top: 34px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .point {
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .panel {
+      padding: 42px 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: min(420px, 100%);
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+    }
+
+    .card p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.86);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 1rem;
+      margin-bottom: 16px;
+      color: var(--ink);
+    }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      padding: 15px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      box-shadow: 0 16px 30px rgba(204, 91, 45, 0.22);
+    }
+
+    button.secondary {
+      margin-top: 12px;
+      background: linear-gradient(135deg, var(--teal), #164f48);
+      box-shadow: 0 16px 30px rgba(31, 111, 103, 0.18);
+    }
+
+    .status {
+      min-height: 24px;
+      margin-top: 14px;
+      color: var(--muted);
+    }
+
+    .note {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(22, 34, 31, 0.05);
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .hero, .panel { padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">Plumber Voice Agency</div>
+      <h1>Tenant access for the people actually running the phones.</h1>
+      <p>Sign in with email to open the role-aware dashboard. The database now enforces tenant access, so this page is the new front door for client admins, dispatchers, and agency operators.</p>
+      <div class="points">
+        <div class="point">Role-aware dashboards backed by Supabase Auth and RLS.</div>
+        <div class="point">Pilot tenants stay lean while full-service tenants can unlock calendar, SMS, reminders, and follow-up automation.</div>
+        <div class="point">Service-role backend flows keep working while user-facing access gets locked down properly.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="card">
+        <h2>Sign In</h2>
+        <p>Use a password if you have one. If not, request a magic link and we’ll send you straight into the dashboard.</p>
+
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="dispatcher@plumbingco.com" />
+
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Optional if you use magic links" />
+
+        <label for="destination">Start In</label>
+        <select id="destination">
+          <option value="client">Client dashboard</option>
+          <option value="admin">Agency dashboard</option>
+        </select>
+
+        <button id="signInBtn">Sign In</button>
+        <button id="magicLinkBtn" class="secondary" type="button">Email Magic Link</button>
+        <div class="status" id="status"></div>
+        <div class="note">Users still need a matching tenant membership before data will appear after login.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://lxkfjannfjfetfjfwuaf.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_hmYHicDbdl4xpuo5WQ9RLQ_bu24mUdD";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const emailEl = document.getElementById("email");
+    const passwordEl = document.getElementById("password");
+    const destinationEl = document.getElementById("destination");
+    const statusEl = document.getElementById("status");
+    const params = new URLSearchParams(window.location.search);
+
+    function pageForDestination(dest) {
+      return dest === "admin" ? "admin-dashboard.html" : "client-dashboard.html";
+    }
+
+    function currentDestination() {
+      return params.get("dest") || destinationEl.value || "client";
+    }
+
+    function redirectTarget() {
+      const destination = currentDestination();
+      destinationEl.value = destination;
+      return pageForDestination(destination);
+    }
+
+    async function redirectIfSignedIn() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data.session) {
+        window.location.href = redirectTarget();
+      }
+    }
+
+    async function signInWithPassword() {
+      statusEl.textContent = "Signing in...";
+      const email = emailEl.value.trim();
+      const password = passwordEl.value;
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        statusEl.textContent = error.message;
+        return;
+      }
+      window.location.href = redirectTarget();
+    }
+
+    async function sendMagicLink() {
+      statusEl.textContent = "Sending magic link...";
+      const email = emailEl.value.trim();
+      const redirectPage = redirectTarget();
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/${redirectPage}`
+        }
+      });
+      statusEl.textContent = error ? error.message : `Magic link sent for ${redirectPage}. Check your inbox.`;
+    }
+
+    destinationEl.value = currentDestination();
+    destinationEl.addEventListener("change", () => {
+      const next = destinationEl.value;
+      const url = new URL(window.location.href);
+      url.searchParams.set("dest", next);
+      window.history.replaceState({}, "", url);
+    });
+
+    document.getElementById("signInBtn").addEventListener("click", signInWithPassword);
+    document.getElementById("magicLinkBtn").addEventListener("click", sendMagicLink);
+    redirectIfSignedIn();
+  </script>
+</body>
+</html>

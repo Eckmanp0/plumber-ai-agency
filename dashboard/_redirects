@@ -1,0 +1,9 @@
+/admin /admin-dashboard 301
+/admin/ /admin-dashboard 301
+/client /client-dashboard 301
+/client/ /client-dashboard 301
+/onboarding/new-plumbing-business-form /new-plumbing-business-form 301
+/onboarding/new-plumbing-business-form/ /new-plumbing-business-form 301
+/onboarding/new-plumbing-business-form.html /new-plumbing-business-form 301
+/onboarding /new-plumbing-business-form 301
+/onboarding/ /new-plumbing-business-form 301

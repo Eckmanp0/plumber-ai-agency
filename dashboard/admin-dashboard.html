@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agency Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --ink: #191d2d;
+      --muted: #6c7287;
+      --panel: #ffffff;
+      --line: rgba(25, 29, 45, 0.08);
+      --bg: #f6f3ee;
+      --navy: #26324f;
+      --copper: #b85d32;
+      --sage: #8aa08b;
+      --rose: #8c4b62;
+      --shadow: 0 18px 38px rgba(25, 29, 45, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(184, 93, 50, 0.10), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(38, 50, 79, 0.10), transparent 26%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px 42px;
+    }
+
+    .masthead {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: -0.03em;
+    }
+
+    .sub { color: var(--muted); margin-top: 8px; }
+
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--navy);
+      color: #fff;
+    }
+    button.secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+
+    .band {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; }
+    .metric-value { margin-top: 8px; font-size: 2.2rem; font-weight: 800; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.45fr 0.85fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .stack { display: grid; gap: 18px; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(38, 50, 79, 0.08);
+      color: var(--navy);
+      font-size: 0.82rem;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    .pill.warn {
+      background: rgba(140, 75, 98, 0.12);
+      color: var(--rose);
+    }
+
+    .pill.good {
+      background: rgba(138, 160, 139, 0.16);
+      color: #406347;
+    }
+
+    .status { color: var(--muted); line-height: 1.6; }
+    .empty { color: var(--muted); }
+    .tiny { font-size: 0.84rem; color: var(--muted); }
+
+    @media (max-width: 1140px) {
+      .band { grid-template-columns: repeat(2, 1fr); }
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="masthead">
+      <div>
+        <h1>Agency Admin</h1>
+        <div class="sub" id="headerSub">Signed-in tenant overview is loading...</div>
+      </div>
+	   <div>
+		<a href="/new-plumbing-business-form"><button id="onboardBtn">Onboarding Form</button></a>
+	  </div>
+      <div class="actions">
+        <button id="refreshBtn" class="secondary">Refresh</button>
+        <button id="signOutBtn">Sign Out</button>
+      </div>
+    </section>
+
+    <section class="band">
+      <article class="metric"><div class="metric-label">Managed Tenants</div><div class="metric-value" id="metricTenants">0</div></article>
+      <article class="metric"><div class="metric-label">Open Leads</div><div class="metric-value" id="metricLeads">0</div></article>
+      <article class="metric"><div class="metric-label">Booked Jobs</div><div class="metric-value" id="metricBooked">0</div></article>
+      <article class="metric"><div class="metric-label">Calls This View</div><div class="metric-value" id="metricCalls">0</div></article>
+      <article class="metric"><div class="metric-label">Cleanup Candidates</div><div class="metric-value" id="metricCleanup">0</div></article>
+    </section>
+
+    <section class="layout">
+      <article class="panel">
+        <h2>Tenant Portfolio</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Business</th>
+              <th>Role</th>
+              <th>Package</th>
+              <th>Booking</th>
+              <th>Ops Status</th>
+            </tr>
+          </thead>
+          <tbody id="tenantTable"></tbody>
+        </table>
+      </article>
+
+      <div class="stack">
+        <article class="panel">
+          <h2>Feature Snapshot</h2>
+          <div id="featureSummary"></div>
+        </article>
+        <article class="panel">
+          <h2>Cleanup Watch</h2>
+          <div id="cleanupList"></div>
+        </article>
+        <article class="panel">
+          <h2>Recent Activity</h2>
+          <div id="activityList"></div>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lxkfjannfjfetfjfwuaf.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_hmYHicDbdl4xpuo5WQ9RLQ_bu24mUdD";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function requireSession() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) {
+        window.location.href = "login.html";
+        return null;
+      }
+      return data.session;
+    }
+
+    function summarizeFeatures(clients) {
+      const totals = {
+        calendar_enabled: 0,
+        sms_enabled: 0,
+        reminders_enabled: 0,
+        outbound_followups_enabled: 0,
+      };
+
+      clients.forEach((client) => {
+        const flags = client.feature_flags_json || {};
+        Object.keys(totals).forEach((key) => {
+          if (flags[key]) totals[key] += 1;
+        });
+      });
+
+      document.getElementById("featureSummary").innerHTML = Object.entries(totals)
+        .map(([key, count]) => `<div class="status"><span class="pill">${count}</span>${key.replace(/_/g, " ")}</div>`)
+        .join("");
+    }
+
+    function isCleanupCandidate(client) {
+      const name = (client.business_name || "").toLowerCase();
+      return name.includes("smoke test") || name.includes("codex test") || !client.google_sheet_id;
+    }
+
+    function renderOpsStatus(client) {
+      const parts = [];
+      if (client.google_sheet_id) parts.push('<span class="pill good">sheet ready</span>');
+      else parts.push('<span class="pill warn">sheet missing</span>');
+
+      if (client.vapi_assistant_id) parts.push('<span class="pill good">assistant linked</span>');
+      else parts.push('<span class="pill warn">assistant missing</span>');
+
+      if (isCleanupCandidate(client)) parts.push('<span class="pill warn">review test data</span>');
+      return parts.join('');
+    }
+
+    function renderCleanupList(clients) {
+      const cleanupClients = clients.filter(isCleanupCandidate);
+      document.getElementById("metricCleanup").textContent = String(cleanupClients.length);
+      document.getElementById("cleanupList").innerHTML = cleanupClients.length
+        ? cleanupClients.map((client) => `
+            <div class="status">
+              <span class="pill warn">review</span>${client.business_name}<br />
+              <span class="tiny">${client.package_tier || 'pilot'} | ${client.booking_mode || 'request_only'} | ${client.google_sheet_id ? 'sheet present' : 'sheet missing'}</span>
+            </div>
+          `).join("")
+        : '<div class="empty">No obvious smoke-test or incomplete tenants in the current view.</div>';
+    }
+
+    async function loadDashboard() {
+      await requireSession();
+
+      const membershipRes = await supabaseClient
+        .from("tenant_users")
+        .select("tenant_id, role, tenants(name, package_tier)")
+        .in("role", ["agency_admin", "client_admin"]);
+
+      if (membershipRes.error) throw membershipRes.error;
+
+      const memberships = membershipRes.data || [];
+      const tenantIds = [...new Set(memberships.map((m) => m.tenant_id).filter(Boolean))];
+
+      let clients = [];
+      if (tenantIds.length) {
+        const clientRes = await supabaseClient
+          .from("clients")
+          .select("id, tenant_id, business_name, booking_mode, package_tier, reports_email, feature_flags_json, google_sheet_id, vapi_assistant_id")
+          .in("tenant_id", tenantIds);
+
+        if (clientRes.error) throw clientRes.error;
+        clients = clientRes.data || [];
+      }
+
+      const clientByTenant = new Map(clients.map((client) => [client.tenant_id, client]));
+
+      document.getElementById("metricTenants").textContent = String(tenantIds.length);
+      document.getElementById("headerSub").textContent = tenantIds.length
+        ? `You currently have authenticated access to ${tenantIds.length} tenant workspace${tenantIds.length === 1 ? "" : "s"}.`
+        : "No tenant memberships found for this user yet.";
+
+      document.getElementById("tenantTable").innerHTML = memberships.map((membership) => {
+        const client = clientByTenant.get(membership.tenant_id) || {};
+        const tenant = membership.tenants || {};
+        return `
+          <tr>
+            <td>
+              <strong>${client.business_name || tenant.name || "Unknown tenant"}</strong><br />
+              <span class="tiny">${client.id || membership.tenant_id}</span>
+            </td>
+            <td>${membership.role}</td>
+            <td>${(client.package_tier || tenant.package_tier || "pilot").replace("_", " ")}</td>
+            <td>${client.booking_mode || "request_only"}</td>
+            <td>${renderOpsStatus(client)}</td>
+          </tr>
+        `;
+      }).join("") || '<tr><td colspan="5" class="empty">No tenant memberships yet.</td></tr>';
+
+      summarizeFeatures(clients);
+      renderCleanupList(clients);
+
+      if (!tenantIds.length) {
+        document.getElementById("activityList").innerHTML = '<div class="empty">No activity is visible until this user is assigned to at least one tenant.</div>';
+        return;
+      }
+
+      const [leadRes, callRes] = await Promise.all([
+        supabaseClient
+          .from("leads")
+          .select("tenant_id, status, caller_name, issue_description, created_at")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false })
+          .limit(8),
+        supabaseClient
+          .from("calls")
+          .select("tenant_id, summary, call_outcome, created_at")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false })
+          .limit(8)
+      ]);
+
+      if (leadRes.error) throw leadRes.error;
+      if (callRes.error) throw callRes.error;
+
+      const leads = leadRes.data || [];
+      const calls = callRes.data || [];
+
+      document.getElementById("metricLeads").textContent = String(leads.filter((lead) => lead.status === "new").length);
+      document.getElementById("metricBooked").textContent = String(leads.filter((lead) => lead.status === "booked").length);
+      document.getElementById("metricCalls").textContent = String(calls.length);
+
+      const activity = [...leads.map((lead) => ({
+        type: "lead",
+        when: lead.created_at,
+        text: `${lead.caller_name || "Unknown caller"} | ${lead.issue_description || "No issue captured"} | ${lead.status}`
+      })), ...calls.map((call) => ({
+        type: "call",
+        when: call.created_at,
+        text: `${call.call_outcome || "completed"} | ${call.summary || "No summary captured"}`
+      }))]
+      .sort((a, b) => new Date(b.when) - new Date(a.when))
+      .slice(0, 10);
+
+      document.getElementById("activityList").innerHTML = activity.length
+        ? activity.map((item) => `<div class="status"><span class="pill">${item.type}</span>${item.text}</div>`).join("")
+        : '<div class="empty">No recent activity yet.</div>';
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", () => loadDashboard().catch((error) => {
+      document.getElementById("headerSub").textContent = error.message;
+    }));
+
+    document.getElementById("signOutBtn").addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      window.location.href = "login.html";
+    });
+
+    loadDashboard().catch((error) => {
+      document.getElementById("headerSub").textContent = error.message;
+    });
+  </script>
+</body>
+</html>

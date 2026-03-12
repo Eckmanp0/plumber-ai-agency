@@ -1,0 +1,33 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_serviceability",
+    "description": "Checks whether the plumbing business serves the caller location and requested service.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "Service ZIP code"
+        },
+        "city": {
+          "type": "string",
+          "description": "Service city"
+        },
+        "service_type": {
+          "type": "string",
+          "description": "Requested plumbing service type"
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "emergency"]
+        }
+      },
+      "required": ["service_type"]
+    }
+  },
+  "server": {
+    "url": "https://lxkfjannfjfetfjfwuaf.supabase.co/functions/v1/vapi-tools",
+    "timeoutSeconds": 30
+  }
+}

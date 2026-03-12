@@ -1,0 +1,29 @@
+project_id = "lxkfjannfjfetfjfwuaf"
+
+[functions.vapi-tools]
+verify_jwt = false
+
+[functions.vapi-events]
+verify_jwt = false
+
+[functions.onboard-client]
+verify_jwt = false
+
+[functions.monthly-report-sync]
+verify_jwt = false
+
+[functions.provision-tenant-user]
+verify_jwt = false
+
+[functions.calendar-provision]
+verify_jwt = false
+
+[functions.sms-send]
+verify_jwt = false
+
+[functions.reminder-worker]
+verify_jwt = false
+
+[functions.followup-run]
+verify_jwt = false
+

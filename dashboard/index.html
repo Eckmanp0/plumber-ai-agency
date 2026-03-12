@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Return From The Veil | Plumbing AI Receptionist</title>
+  <style>
+    :root {
+      --ink: #14202e;
+      --muted: #5f6977;
+      --paper: #f7f2e8;
+      --panel: rgba(255, 255, 255, 0.84);
+      --panel-strong: rgba(255, 255, 255, 0.92);
+      --line: rgba(20, 32, 46, 0.12);
+      --ember: #c55b30;
+      --ember-dark: #963f1d;
+      --harbor: #1d5f64;
+      --midnight: #1f314d;
+      --shadow: 0 24px 64px rgba(20, 32, 46, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(197, 91, 48, 0.16), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(29, 95, 100, 0.14), transparent 28%),
+        linear-gradient(135deg, #f3ead9 0%, #f8f5ee 46%, #ece0c8 100%);
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 22px 64px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 30px;
+    }
+
+    .brand {
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav a,
+    .primary,
+    .secondary {
+      text-decoration: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav a,
+    .secondary {
+      color: var(--midnight);
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid var(--line);
+    }
+
+    .primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--ember), var(--ember-dark));
+      box-shadow: 0 18px 34px rgba(197, 91, 48, 0.24);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.88fr;
+      gap: 22px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .hero-card,
+    .panel,
+    .strip,
+    .note {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-card {
+      padding: 52px 46px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      right: -28px;
+      bottom: -34px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: rgba(29, 95, 100, 0.08);
+    }
+
+    h1 {
+      font-size: clamp(2.8rem, 5vw, 4.7rem);
+      line-height: 0.92;
+      letter-spacing: -0.045em;
+      margin: 0 0 18px;
+      max-width: 10ch;
+    }
+
+    .intro {
+      max-width: 40ch;
+      color: var(--muted);
+      font-size: 1.04rem;
+      line-height: 1.7;
+      margin-bottom: 26px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    .micro {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.7;
+      max-width: 48ch;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 24px 24px 22px;
+    }
+
+    .panel h2,
+    .strip h2,
+    .note h2 {
+      margin: 0 0 10px;
+      font-size: 1.24rem;
+    }
+
+    .panel p,
+    .strip p,
+    .note p,
+    .list li {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      background: rgba(31, 49, 77, 0.08);
+      color: var(--midnight);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+
+    .strip,
+    .note {
+      padding: 28px 26px;
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .callout {
+      display: inline-block;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(29, 95, 100, 0.08);
+      color: var(--harbor);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .access-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .access-card {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .access-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+    }
+
+    .access-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .access-card a {
+      color: var(--ember-dark);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    @media (max-width: 920px) {
+      .hero,
+      .grid,
+      .access-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-card {
+        padding: 38px 26px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <div class="brand">Return From The Veil Online</div>
+      <nav class="nav">
+        <a href="login.html">Login</a>
+        <a href="admin-dashboard.html">Agency Dashboard</a>
+        <a href="client-dashboard.html">Client Dashboard</a>
+      </nav>
+    </div>
+
+    <section class="hero">
+      <article class="hero-card">
+        <div class="brand">Plumbing AI Receptionist</div>
+        <h1>One front door for your agency and every active tenant.</h1>
+        <p class="intro">This homepage is the explainer layer for the platform. It gives agency staff and clients a clear place to orient themselves before logging in, while Supabase continues to handle authentication, tenant access, dashboards, bookings, and reporting behind the scenes.</p>
+        <div class="actions">
+          <a class="primary" href="login.html">Continue To Login</a>
+          <a class="secondary" href="admin-dashboard.html">Agency View</a>
+        </div>
+        <div class="micro">Use this page as the branded landing point on Cloudflare Pages. The application screens remain in the `.html` files, and the shortened URLs can still resolve cleanly when you want them to.</div>
+      </article>
+
+      <div class="stack">
+        <article class="panel">
+          <div class="callout">Before Login</div>
+          <h2>Who this portal is for</h2>
+          <p>This portal is for internal agency operators and onboarded plumbing clients. It is not a public customer booking page.</p>
+          <div class="chips">
+            <span class="chip">Agency Admin</span>
+            <span class="chip">Client Admin</span>
+            <span class="chip">Dispatcher</span>
+            <span class="chip">Tenant Scoped</span>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="callout">What’s Live</div>
+          <h2>Current platform capability</h2>
+          <p>Tenant onboarding, Google Sheet copying, lead capture, call logging, dashboard access, and calendar-direct booking for full-service accounts are already active.</p>
+          <div class="chips">
+            <span class="chip">Supabase Auth</span>
+            <span class="chip">RLS</span>
+            <span class="chip">Google Sheets</span>
+            <span class="chip">Calendar Booking</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="strip">
+        <h2>What users should expect</h2>
+        <ul class="list">
+          <li>Agency admins can review tenants, onboarding progress, and operational status.</li>
+          <li>Client users can review leads, call activity, and dashboard information tied to their business.</li>
+          <li>Full-service tenants can run calendar-direct booking workflows.</li>
+          <li>Pilot tenants stay limited to the lighter request-only service model.</li>
+        </ul>
+      </article>
+
+      <article class="strip">
+        <h2>Access points</h2>
+        <div class="access-grid">
+          <div class="access-card">
+            <h3>Standard Login</h3>
+            <p>Use the main sign-in screen first when you need authenticated access into the platform.</p>
+            <a href="login.html">Open login.html</a>
+          </div>
+          <div class="access-card">
+            <h3>Agency Dashboard</h3>
+            <p>Use the agency dashboard for internal operations, tenant oversight, and administrative control.</p>
+            <a href="admin-dashboard.html">Open admin-dashboard.html</a>
+          </div>
+          <div class="access-card">
+            <h3>Client Dashboard</h3>
+            <p>Use the client dashboard for tenant-facing lead visibility and account-level reporting.</p>
+            <a href="client-dashboard.html">Open client-dashboard.html</a>
+          </div>
+          <div class="access-card">
+            <h3>Clean Short URLs</h3>
+            <p>You can still shorten the path in the browser. The `.html` files remain the source pages behind those routes.</p>
+            <a href="login">Try /login</a>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="note">
+      <h2>Operational note</h2>
+      <p>This homepage should stay informational and stable. It should explain what the system is, who should log in, and where each user type belongs. The application logic should remain in the dedicated dashboard pages rather than being duplicated here.</p>
+    </section>
+  </div>
+</body>
+</html>
