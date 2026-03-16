@@ -198,7 +198,7 @@
     <section class="panel">
       <div class="card">
         <h2>Sign In</h2>
-        <p>Use a password if you have one. If not, request a magic link and we’ll send you straight into the dashboard.</p>
+        <p>Use a password if you have one. If not, request a magic link and we'll send you straight into the dashboard.</p>
 
         <label for="email">Email</label>
         <input id="email" type="email" placeholder="dispatcher@plumbingco.com" />
@@ -230,9 +230,10 @@
     const destinationEl = document.getElementById("destination");
     const statusEl = document.getElementById("status");
     const params = new URLSearchParams(window.location.search);
+    const accessParam = params.get("access");
 
     function pageForDestination(dest) {
-      return dest === "admin" ? "admin-dashboard.html" : "client-dashboard.html";
+      return dest === "admin" ? "admin_management" : "client-dashboard.html";
     }
 
     function currentDestination() {
@@ -275,6 +276,10 @@
         }
       });
       statusEl.textContent = error ? error.message : `Magic link sent for ${redirectPage}. Check your inbox.`;
+    }
+
+    if (accessParam === "denied") {
+      statusEl.textContent = "Your account is signed in, but it does not have agency admin access for the management console.";
     }
 
     destinationEl.value = currentDestination();

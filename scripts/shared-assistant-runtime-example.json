@@ -1,0 +1,14 @@
+{
+  "assistantOverrides": {
+    "variableValues": {
+      "tenant_id": "TENANT_UUID",
+      "client_id": "CLIENT_UUID",
+      "business_name": "Business Name",
+      "hours_text": "Mon 8-5; Tue 8-5; Wed 8-5; Thu 8-5; Fri 8-5; Sat closed; Sun closed",
+      "service_area_text": "Salem, Keizer, ZIP 97301, ZIP 97302",
+      "services_text": "Drain Cleaning, Leak Repair, Water Heater Repair",
+      "emergency_service_text": "enabled",
+      "booking_rules_text": "same-day allowed; default windows: Tomorrow morning tomorrow 8am-12pm, Tomorrow afternoon tomorrow 12pm-4pm"
+    }
+  }
+}

@@ -30,6 +30,28 @@ function getRole(value: unknown): TenantRole {
     : "client_admin";
 }
 
+function normalizeUrl(value: string | null): string | null {
+  if (!value) return null;
+  return value.trim().replace(/\/+$/, "");
+}
+
+function buildInviteRedirectUrl(body: Json): string | undefined {
+  const explicitRedirect = normalizeUrl(getString(body.invite_redirect_to));
+  if (explicitRedirect) return explicitRedirect;
+
+  const explicitAppBase = normalizeUrl(
+    getString(body.app_base_url) ??
+    Deno.env.get("APP_BASE_URL") ??
+    Deno.env.get("PUBLIC_APP_URL") ??
+    Deno.env.get("SITE_URL") ??
+    Deno.env.get("SUPABASE_INVITE_BASE_URL") ??
+    null,
+  );
+
+  if (!explicitAppBase) return undefined;
+  return `${explicitAppBase}/login?dest=client`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -56,6 +78,7 @@ serve(async (req) => {
   const fullName = getString(body.full_name);
   const password = getString(body.password);
   const sendInvite = body.send_invite !== false;
+  const inviteRedirectTo = buildInviteRedirectUrl(body);
 
   if (!email || !tenantId) {
     return jsonResponse({ error: "email and tenant_id are required" }, 400);
@@ -87,6 +110,7 @@ serve(async (req) => {
   if (!matchedUser) {
     if (sendInvite) {
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        redirectTo: inviteRedirectTo,
         data: {
           full_name: fullName,
           tenant_id: tenantId,
@@ -131,5 +155,6 @@ serve(async (req) => {
     email: matchedUser.email ?? email,
     role,
     invited: sendInvite,
+    invite_redirect_to: inviteRedirectTo ?? null,
   });
 });

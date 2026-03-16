@@ -1,0 +1,875 @@
+# Master Deployment Document — Plumber Voice Agent Agency
+
+## Objective
+
+Build a production-minded, multi-tenant plumber voice-agent platform using Vapi, Supabase, Google Calendar, Google Sheets, and SMS automation.
+
+This system must support:
+
+* automated onboarding
+* multi-tenant dashboard
+* calendar booking integration
+* SMS reminders
+* outbound AI follow-ups
+* reusable deployment for multiple plumbing companies
+
+---
+
+## Core Stack
+
+* **Vapi**: inbound and outbound voice agents, phone numbers, tool calling, dynamic variables
+* **Supabase**: Postgres database, auth, row-level security, edge functions, storage
+* **Google Calendar**: availability lookup and direct booking
+* **Google Sheets**: per-client operational reporting and lead logs
+* **SMS provider**: Twilio or equivalent for reminders and follow-ups
+* **Frontend**: admin dashboard + client dashboard
+
+---
+
+## Product Modes
+
+The platform must support two booking modes per client:
+
+1. **request_only**
+
+   * collect customer request
+   * store requested windows
+   * notify client for manual confirmation
+
+2. **calendar_direct**
+
+   * check live availability
+   * offer appointment windows
+   * book directly on connected calendar
+   * trigger reminders automatically
+
+---
+
+## Repository Structure
+
+```text
+plumber-voice-agency/
+├── apps/
+│   ├── admin-dashboard/
+│   ├── client-dashboard/
+│   └── onboarding-portal/
+├── supabase/
+│   ├── migrations/
+│   │   ├── 001_init.sql
+│   │   ├── 002_multi_tenant.sql
+│   │   ├── 003_calendar.sql
+│   │   ├── 004_sms_and_followups.sql
+│   │   └── 005_rls_policies.sql
+│   ├── seed/
+│   │   └── seed.sql
+│   └── functions/
+│       ├── vapi-webhook/
+│       ├── onboarding-create-client/
+│       ├── onboarding-provision-vapi/
+│       ├── calendar-connect/
+│       ├── calendar-refresh-token/
+│       ├── calendar-availability/
+│       ├── calendar-book/
+│       ├── calendar-cancel/
+│       ├── sms-send/
+│       ├── reminder-worker/
+│       ├── followup-run/
+│       ├── reports-daily/
+│       └── reports-monthly/
+├── vapi/
+│   ├── plumber-assistant-template.json
+│   └── outbound-followup-template.json
+├── integrations/
+│   ├── google-calendar/
+│   └── google-sheets/
+├── tests/
+│   ├── api/
+│   ├── integration/
+│   └── e2e/
+├── docs/
+│   ├── codex-prompt.md
+│   ├── env-vars.md
+│   └── setup.md
+└── .env.example
+```
+
+---
+
+## Multi-Tenant Database Model
+
+Every tenant-scoped table must include `tenant_id`.
+
+### 001_init.sql
+
+```sql
+create extension if not exists "pgcrypto";
+create extension if not exists "uuid-ossp";
+
+create table tenants (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text unique not null,
+  created_at timestamptz default now()
+);
+
+create table tenant_users (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  user_id uuid not null,
+  role text not null check (role in ('agency_admin','client_admin','dispatcher','tech_viewer')),
+  created_at timestamptz default now()
+);
+
+create table client_settings (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  business_name text not null,
+  owner_name text,
+  business_phone text,
+  business_email text,
+  service_area_json jsonb not null default '[]'::jsonb,
+  services_json jsonb not null default '[]'::jsonb,
+  hours_json jsonb not null default '{}'::jsonb,
+  emergency_enabled boolean default false,
+  same_day_allowed boolean default false,
+  urgent_alert_phone text,
+  reports_email text,
+  booking_mode text not null default 'request_only' check (booking_mode in ('request_only','calendar_direct')),
+  google_sheet_id text,
+  vapi_assistant_id text,
+  vapi_phone_number_id text,
+  created_at timestamptz default now()
+);
+
+create table leads (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  caller_name text,
+  caller_phone text,
+  service_address text,
+  issue text,
+  service_type text,
+  urgency text,
+  preferred_time text,
+  status text not null default 'new' check (status in ('new','booked','callback','declined','spam','needs_review')),
+  source text default 'inbound_call',
+  created_at timestamptz default now()
+);
+
+create table calls (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  lead_id uuid references leads(id) on delete set null,
+  vapi_call_id text,
+  direction text not null default 'inbound' check (direction in ('inbound','outbound')),
+  transcript text,
+  summary text,
+  duration_seconds integer,
+  outcome text,
+  recording_url text,
+  created_at timestamptz default now()
+);
+
+create table appointments (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  lead_id uuid references leads(id) on delete set null,
+  external_event_id text,
+  booked_start timestamptz,
+  booked_end timestamptz,
+  timezone text default 'America/Los_Angeles',
+  status text not null default 'pending' check (status in ('pending','booked','confirmed','cancelled','needs_review')),
+  notes text,
+  created_at timestamptz default now()
+);
+
+create table monthly_usage (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  month text not null,
+  total_calls integer default 0,
+  qualified_leads integer default 0,
+  booked_jobs integer default 0,
+  minutes_used integer default 0,
+  estimated_cost numeric default 0,
+  invoice_amount numeric default 0,
+  created_at timestamptz default now()
+);
+```
+
+### 003_calendar.sql
+
+```sql
+create table calendar_connections (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  provider text not null default 'google',
+  calendar_id text not null,
+  access_token text,
+  refresh_token text,
+  token_expires_at timestamptz,
+  timezone text default 'America/Los_Angeles',
+  active boolean default true,
+  created_at timestamptz default now()
+);
+```
+
+### 004_sms_and_followups.sql
+
+```sql
+create table reminders (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  appointment_id uuid not null references appointments(id) on delete cascade,
+  reminder_type text not null check (reminder_type in ('sms','call')),
+  scheduled_for timestamptz not null,
+  status text not null default 'queued' check (status in ('queued','sent','failed','cancelled')),
+  payload_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+create table sms_messages (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  lead_id uuid references leads(id) on delete set null,
+  appointment_id uuid references appointments(id) on delete set null,
+  to_phone text not null,
+  direction text not null check (direction in ('outbound','inbound')),
+  template_key text,
+  body text not null,
+  provider_message_id text,
+  status text not null default 'queued',
+  created_at timestamptz default now()
+);
+
+create table followup_rules (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  active boolean default true,
+  trigger_reason text not null,
+  followup_type text not null check (followup_type in ('sms','outbound_call')),
+  delay_minutes integer not null,
+  template_key text not null,
+  created_at timestamptz default now()
+);
+
+create table followups (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  lead_id uuid references leads(id) on delete cascade,
+  appointment_id uuid references appointments(id) on delete set null,
+  followup_type text not null check (followup_type in ('sms','outbound_call')),
+  trigger_reason text not null,
+  scheduled_for timestamptz not null,
+  status text not null default 'queued' check (status in ('queued','processing','sent','completed','failed','cancelled')),
+  payload_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+```
+
+### 005_rls_policies.sql
+
+```sql
+alter table tenant_users enable row level security;
+alter table client_settings enable row level security;
+alter table leads enable row level security;
+alter table calls enable row level security;
+alter table appointments enable row level security;
+alter table reminders enable row level security;
+alter table sms_messages enable row level security;
+alter table followups enable row level security;
+alter table monthly_usage enable row level security;
+alter table calendar_connections enable row level security;
+
+create policy "tenant can view own client settings"
+on client_settings for select
+using (
+  tenant_id in (
+    select tenant_id from tenant_users where tenant_users.user_id = auth.uid()
+  )
+);
+
+create policy "tenant can view own leads"
+on leads for select
+using (
+  tenant_id in (
+    select tenant_id from tenant_users where tenant_users.user_id = auth.uid()
+  )
+);
+
+create policy "tenant can insert own leads"
+on leads for insert
+with check (
+  tenant_id in (
+    select tenant_id from tenant_users where tenant_users.user_id = auth.uid()
+  )
+);
+
+create policy "tenant can view own calls"
+on calls for select
+using (
+  tenant_id in (
+    select tenant_id from tenant_users where tenant_users.user_id = auth.uid()
+  )
+);
+
+create policy "tenant can view own appointments"
+on appointments for select
+using (
+  tenant_id in (
+    select tenant_id from tenant_users where tenant_users.user_id = auth.uid()
+  )
+);
+```
+
+---
+
+## Vapi Assistant Templates
+
+### Inbound Assistant Template
+
+File: `vapi/plumber-assistant-template.json`
+
+```json
+{
+  "name": "Plumbing Receptionist",
+  "firstMessage": "Thank you for calling {{business_name}}, how can I help you today?",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  },
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "Rachel"
+  },
+  "systemPrompt": "You are a professional receptionist for a plumbing company. Your job is to identify the caller's plumbing issue, determine urgency, collect caller information, confirm service location, and either schedule service or create a callback request. Never diagnose repairs, never promise pricing unless provided, and always verify the address and phone number before ending the call.",
+  "tools": [
+    {
+      "type": "function",
+      "name": "check_serviceability",
+      "description": "Check if the caller is in the service area and whether the requested service is supported",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "zip": { "type": "string" },
+          "service_type": { "type": "string" }
+        },
+        "required": ["tenant_id", "zip"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "check_calendar_availability",
+      "description": "Return open appointment windows for this business",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "requested_date": { "type": "string" },
+          "service_type": { "type": "string" },
+          "urgency": { "type": "string" }
+        },
+        "required": ["tenant_id", "requested_date"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "book_calendar_appointment",
+      "description": "Create a confirmed appointment on the connected calendar",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "lead_id": { "type": "string" },
+          "start_time": { "type": "string" },
+          "end_time": { "type": "string" },
+          "customer_name": { "type": "string" },
+          "customer_phone": { "type": "string" },
+          "service_address": { "type": "string" },
+          "issue_summary": { "type": "string" }
+        },
+        "required": ["tenant_id", "start_time", "end_time", "customer_name"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "create_lead",
+      "description": "Create a plumbing service lead record and return the lead id",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "caller_name": { "type": "string" },
+          "caller_phone": { "type": "string" },
+          "address": { "type": "string" },
+          "issue": { "type": "string" },
+          "service_type": { "type": "string" },
+          "urgency": { "type": "string" },
+          "preferred_time": { "type": "string" }
+        },
+        "required": ["tenant_id", "caller_name", "caller_phone", "address", "issue"]
+      }
+    }
+  ]
+}
+```
+
+### Outbound Follow-Up Assistant Template
+
+File: `vapi/outbound-followup-template.json`
+
+```json
+{
+  "name": "Plumber Follow-Up Caller",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  },
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "Rachel"
+  },
+  "systemPrompt": "You are an outbound follow-up assistant for a plumbing company. Your job is to confirm whether the customer still needs service, offer scheduling help, and escalate to a human callback if needed. Be concise, clear, and respectful.",
+  "tools": [
+    {
+      "type": "function",
+      "name": "create_lead",
+      "description": "Update or create a lead callback outcome",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "caller_name": { "type": "string" },
+          "caller_phone": { "type": "string" },
+          "address": { "type": "string" },
+          "issue": { "type": "string" },
+          "service_type": { "type": "string" },
+          "urgency": { "type": "string" },
+          "preferred_time": { "type": "string" }
+        },
+        "required": ["tenant_id", "caller_phone"]
+      }
+    }
+  ]
+}
+```
+
+### Runtime Variables to Inject Per Tenant
+
+* `business_name`
+* `service_area`
+* `services_offered`
+* `hours`
+* `emergency_enabled`
+* `same_day_allowed`
+* `booking_mode`
+* `business_phone`
+* `tenant_id`
+
+---
+
+## Automated Onboarding System
+
+### Onboarding Form Fields
+
+* business_name
+* owner_name
+* business_phone
+* business_email
+* service_area_json
+* services_json
+* hours_json
+* emergency_enabled
+* same_day_allowed
+* urgent_alert_phone
+* reports_email
+* calendar_provider
+* google_sheet_template_id
+* vapi_phone_number_preference
+* booking_mode
+
+### Onboarding Sequence
+
+```text
+Submit onboarding form
+→ create tenant
+→ create auth user
+→ create tenant_users row
+→ create client_settings row
+→ copy Google Sheet template
+→ provision Vapi assistant binding
+→ assign Vapi phone number
+→ create default reminder rules
+→ create default followup rules
+→ optionally connect Google Calendar
+→ send onboarding complete email
+→ mark tenant active
+```
+
+### Edge Functions to Build
+
+* `onboarding-create-client`
+* `onboarding-provision-vapi`
+* `calendar-connect`
+* `calendar-refresh-token`
+* `calendar-availability`
+* `calendar-book`
+* `calendar-cancel`
+* `sms-send`
+* `reminder-worker`
+* `followup-run`
+* `reports-daily`
+* `reports-monthly`
+* `vapi-webhook`
+
+---
+
+## Calendar Integration
+
+### Requirements
+
+* support Google Calendar first
+* create proper OAuth connection flow
+* store calendar connection per tenant
+* support availability lookup and booking
+* support cancellation and rescheduling later
+
+### Availability Flow
+
+```text
+Caller asks to book service
+→ Vapi assistant collects preferred date/time
+→ assistant calls calendar-availability
+→ function returns 2–3 open slots
+→ caller selects slot
+→ assistant calls book_calendar_appointment
+→ event created on Google Calendar
+→ appointment row created in database
+→ reminder rows created
+→ client notified
+```
+
+### Calendar API Contracts
+
+#### check availability
+
+```json
+{
+  "tenant_id": "uuid",
+  "requested_date": "2026-03-15",
+  "service_type": "drain cleaning",
+  "urgency": "standard"
+}
+```
+
+#### book appointment
+
+```json
+{
+  "tenant_id": "uuid",
+  "lead_id": "uuid",
+  "start_time": "2026-03-15T10:00:00-07:00",
+  "end_time": "2026-03-15T12:00:00-07:00",
+  "customer_name": "John Henry Doe",
+  "customer_phone": "555-555-1212",
+  "service_address": "123 Main St, Salem, OR",
+  "issue_summary": "Kitchen drain backup"
+}
+```
+
+---
+
+## SMS Reminder Engine
+
+### Reminder Schedule Defaults
+
+* immediate confirmation after booking
+* 24 hours before appointment
+* 2 hours before appointment
+
+### SMS Templates
+
+#### booking confirmation
+
+```text
+Hi {{customer_name}}, you're scheduled with {{business_name}} on {{appointment_time}} at {{service_address}}. Reply C to confirm or call {{business_phone}}.
+```
+
+#### 24-hour reminder
+
+```text
+Reminder from {{business_name}}: your plumbing appointment is tomorrow at {{appointment_time}}. Reply if you need to reschedule.
+```
+
+#### on-the-way update
+
+```text
+{{business_name}} update: your technician is on the way. Questions? Call {{business_phone}}.
+```
+
+### Reminder Worker Flow
+
+```text
+appointment booked
+→ insert queued reminders
+→ worker polls reminders due now
+→ sms-send function dispatches SMS
+→ update sms_messages and reminders tables
+→ mark sent or failed
+```
+
+---
+
+## Outbound AI Follow-Ups
+
+### Use Cases
+
+* unbooked new lead after 15 minutes
+* after-hours lead next morning
+* estimate request not booked within 2 hours
+* post-service review request after 24 hours
+
+### Default Rule Seeds
+
+* `unbooked_new_lead` → `sms` → 15 minutes
+* `after_hours_callback` → `outbound_call` → 600 minutes
+* `estimate_followup` → `sms` → 120 minutes
+* `post_service_review` → `sms` → 1440 minutes
+
+### Follow-Up Worker Flow
+
+```text
+new lead inserted
+→ evaluate followup rules
+→ queue followup rows
+→ scheduler picks due followups
+→ if sms, call sms-send
+→ if outbound_call, call Vapi outbound endpoint
+→ write results to followups and calls tables
+```
+
+---
+
+## Multi-Tenant Dashboard Requirements
+
+### Agency Admin Dashboard
+
+Pages/widgets:
+
+* tenants list
+* onboarding queue
+* calls today
+* leads today
+* booked today
+* reminder failures
+* follow-up failures
+* calendar connection status
+* usage and billing summary
+* per-client metrics
+
+### Client Dashboard
+
+Pages/widgets:
+
+* today's calls
+* new leads
+* booked appointments
+* callback required
+* reminder queue
+* follow-up queue
+* calendar connected yes/no
+* emergency lead count
+* booked vs callback rate
+* SMS delivery status
+* settings editor
+
+### Core UI Requirements
+
+* Supabase Auth login
+* role-aware navigation
+* tenant-scoped data queries
+* agency admin sees all tenants
+* client admin sees only own tenant
+* export leads/report CSV
+* basic filters by date, status, urgency, service type
+
+---
+
+## Google Sheets Integration
+
+Each tenant gets a copied sheet from a template.
+
+### Sheet Tabs
+
+* Leads
+* Booked Jobs
+* Call Logs
+* Monthly Report
+
+### Sync Events
+
+* new lead created
+* appointment booked
+* call completed
+* monthly summary generated
+
+---
+
+## Vapi Webhook Responsibilities
+
+The `vapi-webhook` function must:
+
+* validate incoming webhook requests
+* parse call lifecycle events
+* store transcripts and summaries
+* map tool call results if needed
+* create or update lead and call records
+* trigger emergency notifications when urgency is high
+* trigger follow-up evaluation after call completion
+
+---
+
+## Deployment Order
+
+1. Create Supabase project
+2. Run all SQL migrations
+3. Configure auth and RLS
+4. Build edge functions
+5. Set environment variables
+6. Create Vapi assistant templates
+7. Configure webhook URLs and tool endpoints
+8. Build onboarding portal
+9. Build admin and client dashboards
+10. Configure Google Calendar OAuth
+11. Configure Google Sheets template copy flow
+12. Configure SMS provider
+13. Seed default follow-up and reminder rules
+14. Run acceptance tests
+15. Create first client tenant
+16. Run 10 test call scenarios
+17. Go live
+
+---
+
+## Environment Variables
+
+```text
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+VAPI_API_KEY=
+VAPI_WEBHOOK_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=
+GOOGLE_SHEETS_TEMPLATE_ID=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+APP_BASE_URL=
+```
+
+---
+
+## Acceptance Tests
+
+### Automated onboarding
+
+* onboarding form creates tenant
+* auth user created
+* tenant_users row created
+* client_settings row created
+* Google Sheet id saved
+* Vapi assistant id saved
+* Vapi phone number id saved
+
+### Multi-tenant isolation
+
+* client A cannot see client B leads
+* agency admin can view all tenants
+* client admin can edit only own tenant settings
+
+### Calendar booking
+
+* available slots returned from connected calendar
+* appointment booking creates external event id
+* appointment row saved correctly
+
+### SMS reminders
+
+* booking inserts queued reminders
+* worker sends message
+* reminder and sms_messages rows marked sent
+
+### Outbound follow-ups
+
+* unbooked lead creates queued followup
+* SMS follow-up sends correctly
+* outbound call follow-up creates call record
+
+### Voice flow
+
+* inbound assistant creates lead
+* emergency urgency triggers urgent notification
+* request_only mode stores callback request
+* calendar_direct mode books appointment
+
+---
+
+## Test Call Scenarios
+
+1. emergency burst pipe after hours
+2. standard drain cleaning request
+3. water heater replacement inquiry
+4. out-of-area caller
+5. spam/non-service call
+6. direct booking using connected calendar
+7. request_only callback booking request
+8. reschedule request
+9. landlord calling for tenant property
+10. repeat customer with urgent leak
+
+---
+
+## Codex Prompt
+
+```text
+Build a production-minded multi-tenant plumber voice-agent platform using Vapi, Supabase, Google Calendar, Google Sheets, and SMS automation.
+
+Requirements:
+1. Self-serve automated onboarding flow
+2. Multi-tenant auth with Supabase Auth + RLS
+3. Tenant-scoped dashboards for agency admin and client admin
+4. Vapi inbound assistant template with dynamic variables and function tools
+5. Google Calendar OAuth connection and booking support
+6. SMS reminder engine
+7. Outbound follow-up engine using SMS and Vapi outbound calls
+8. Postgres migrations, Edge Functions, and frontend pages
+9. Seed data, test fixtures, and acceptance tests
+10. Clean README with setup instructions and env vars
+
+Use one reusable Vapi assistant template and inject tenant-specific variables at runtime.
+All tenant-scoped tables must include tenant_id and enforce RLS.
+Implement booking_mode with both request_only and calendar_direct support.
+Persist all call, lead, appointment, reminder, and follow-up events for reporting.
+Build the repo exactly from the repository structure in this document.
+```
+
+---
+
+## Delivery Standard
+
+Codex should produce:
+
+* runnable repo
+* SQL migrations
+* edge functions
+* frontend dashboards
+* environment sample
+* setup documentation
+* seed data
+* automated tests
+* deployment instructions
+
+This is the master deployment document to implement the full plumber voice-agent agency stack.

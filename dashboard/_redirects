@@ -1,5 +1,10 @@
-/admin /admin-dashboard 301
-/admin/ /admin-dashboard 301
+/admin /admin_management 301
+/admin/ /admin_management 301
+/admin-dashboard /admin_management 301
+/admin-dashboard/ /admin_management 301
+/admin-management /admin_management 301
+/admin-management/ /admin_management 301
+/admin_management/ /admin_management 301
 /client /client-dashboard 301
 /client/ /client-dashboard 301
 /onboarding/new-plumbing-business-form /new-plumbing-business-form 301

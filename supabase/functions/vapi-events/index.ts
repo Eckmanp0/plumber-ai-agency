@@ -11,7 +11,7 @@ type SheetRoute = {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-vapi-tenant-id, x-vapi-client-id, x-vapi-business-name",
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -40,6 +40,29 @@ function asJson(value: unknown): Json {
   return value && typeof value === "object" ? value as Json : {};
 }
 
+function getBearerToken(req: Request): string | null {
+  const auth = req.headers.get("authorization");
+  if (!auth) return null;
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function verifyVapiBearer(req: Request): string | null {
+  const expected = Deno.env.get("VAPI_WEBHOOK_BEARER");
+  if (!expected) return null;
+  const provided = getBearerToken(req);
+  if (!provided || provided !== expected) return "Unauthorized Vapi request.";
+  return null;
+}
+
+function headerContext(req: Request): Json {
+  return {
+    tenant_id: req.headers.get("x-vapi-tenant-id")?.trim(),
+    client_id: req.headers.get("x-vapi-client-id")?.trim(),
+    business_name: req.headers.get("x-vapi-business-name")?.trim(),
+  };
+}
+
 function normalizePhone(value: string | null): string | null {
   if (!value) return null;
   const digits = value.replace(/\D/g, "");
@@ -54,13 +77,16 @@ async function resolveClientContext(args: {
   callJson: Json;
   assistantMetadata: Json;
   callAssistantMetadata: Json;
+  requestContext: Json;
   vapiCallId: string | null;
 }): Promise<{ clientId: string | null; tenantId: string | null }> {
   const directClientId =
+    getString(args.requestContext, ["client_id"]) ??
     getString(args.assistantMetadata, ["client_id"]) ??
     getString(args.callAssistantMetadata, ["client_id"]) ??
     getString(args.payload, ["client_id"]);
   const directTenantId =
+    getString(args.requestContext, ["tenant_id"]) ??
     getString(args.assistantMetadata, ["tenant_id"]) ??
     getString(args.callAssistantMetadata, ["tenant_id"]) ??
     getString(args.payload, ["tenant_id"]);
@@ -124,6 +150,20 @@ async function resolveClientContext(args: {
     getString(asJson(args.payload.phoneNumber), ["id"]);
 
   if (phoneNumberId) {
+    const { data: mappedNumber } = await args.supabase
+      .from("phone_numbers")
+      .select("client_id, tenant_id")
+      .eq("vapi_phone_number_id", phoneNumberId)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (mappedNumber?.client_id) {
+      return {
+        clientId: String(mappedNumber.client_id),
+        tenantId: mappedNumber.tenant_id ? String(mappedNumber.tenant_id) : null,
+      };
+    }
+
     const { data: clientByNumber } = await args.supabase
       .from("clients")
       .select("id, tenant_id")
@@ -144,6 +184,20 @@ async function resolveClientContext(args: {
     normalizePhone(getString(asJson(args.payload.customer), ["to", "toNumber"]));
 
   if (toNumber) {
+    const { data: mappedNumber } = await args.supabase
+      .from("phone_numbers")
+      .select("client_id, tenant_id")
+      .eq("number", toNumber)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (mappedNumber?.client_id) {
+      return {
+        clientId: String(mappedNumber.client_id),
+        tenantId: mappedNumber.tenant_id ? String(mappedNumber.tenant_id) : null,
+      };
+    }
+
     const { data: matchingClients } = await args.supabase
       .from("clients")
       .select("id, tenant_id, phone, contact_phone")
@@ -232,8 +286,12 @@ serve(async (req) => {
   });
 
   try {
+    const authError = verifyVapiBearer(req);
+    if (authError) return jsonResponse({ error: authError }, 401);
+
     const body = await req.json();
     const payload = body && typeof body === "object" ? body as Json : {};
+    const requestContext = headerContext(req);
     const message = payload.message;
     if (!message || typeof message !== "object") return jsonResponse({ ok: true });
 
@@ -253,6 +311,7 @@ serve(async (req) => {
       callJson,
       assistantMetadata,
       callAssistantMetadata,
+      requestContext,
       vapiCallId,
     });
     const clientId = resolved.clientId;

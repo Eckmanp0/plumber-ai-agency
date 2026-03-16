@@ -22,9 +22,21 @@ type CalendarConnection = {
   timezone: string;
 };
 
+type TenantMappedService = {
+  service_key: string;
+  service_name: string;
+  emergency_possible: boolean;
+};
+
+type TenantMappedArea = {
+  county: string | null;
+  city: string | null;
+  zip_code: string | null;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-vapi-tenant-id, x-vapi-client-id, x-vapi-business-name",
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -55,6 +67,29 @@ function asJson(value: unknown): Json {
   return value && typeof value === "object" ? value as Json : {};
 }
 
+function getBearerToken(req: Request): string | null {
+  const auth = req.headers.get("authorization");
+  if (!auth) return null;
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function verifyVapiBearer(req: Request): string | null {
+  const expected = Deno.env.get("VAPI_WEBHOOK_BEARER");
+  if (!expected) return null;
+  const provided = getBearerToken(req);
+  if (!provided || provided !== expected) return "Unauthorized Vapi request.";
+  return null;
+}
+
+function headerContext(req: Request): Json {
+  return {
+    tenant_id: req.headers.get("x-vapi-tenant-id")?.trim(),
+    client_id: req.headers.get("x-vapi-client-id")?.trim(),
+    business_name: req.headers.get("x-vapi-business-name")?.trim(),
+  };
+}
+
 function boolFlag(obj: Json, key: string): boolean {
   return obj[key] === true;
 }
@@ -72,16 +107,27 @@ function normalizePhone(value: string | null): string | null {
   return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 
+function normalizeServiceToken(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized || null;
+}
+
 async function resolveClientId(
   supabase: ReturnType<typeof createClient>,
   payload: Json,
   messageJson: Json,
   callJson: Json,
   existingArgs: Json,
+  requestContext: Json,
   vapiCallId: string | null,
 ): Promise<string | null> {
   const directClientId = getString(existingArgs, ["client_id"]);
   if (directClientId) return directClientId;
+
+  const requestClientId = getString(requestContext, ["client_id"]);
+  const requestTenantId = getString(requestContext, ["tenant_id"]);
+  if (requestClientId) return requestClientId;
 
   const assistantMetadata = asJson(asJson(messageJson.assistant).metadata);
   const callAssistantMetadata = asJson(asJson(asJson(callJson.assistant)).metadata);
@@ -107,7 +153,7 @@ async function resolveClientId(
   const assistantTenantId = getString(assistantVariableValues, ["tenant_id"]);
   if (assistantClientId) return assistantClientId;
 
-  const tenantIdCandidate = metadataTenantId ?? overrideTenantId ?? assistantTenantId;
+  const tenantIdCandidate = requestTenantId ?? metadataTenantId ?? overrideTenantId ?? assistantTenantId;
   if (tenantIdCandidate) {
     const { data: clientByTenant } = await supabase
       .from("clients")
@@ -134,6 +180,15 @@ async function resolveClientId(
     getString(asJson(callJson.phoneNumber), ["id"]) ??
     getString(asJson(callJson.customer), ["phoneNumberId", "phone_number_id"]);
   if (phoneNumberId) {
+    const { data: mappedNumber } = await supabase
+      .from("phone_numbers")
+      .select("client_id")
+      .eq("vapi_phone_number_id", phoneNumberId)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (mappedNumber?.client_id) return String(mappedNumber.client_id);
+
     const { data: clientByNumber } = await supabase
       .from("clients")
       .select("id")
@@ -148,6 +203,15 @@ async function resolveClientId(
     normalizePhone(getString(asJson(callJson.customer), ["to", "toNumber"])) ??
     normalizePhone(getString(asJson(payload.customer), ["to", "toNumber"]));
   if (toNumber) {
+    const { data: mappedNumber } = await supabase
+      .from("phone_numbers")
+      .select("client_id")
+      .eq("number", toNumber)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (mappedNumber?.client_id) return String(mappedNumber.client_id);
+
     const { data: matchingClients } = await supabase
       .from("clients")
       .select("id")
@@ -159,6 +223,58 @@ async function resolveClientId(
   }
 
   return null;
+}
+
+async function getTenantMappedServices(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string | null,
+): Promise<TenantMappedService[]> {
+  if (!tenantId) return [];
+
+  const { data, error } = await supabase
+    .from("tenant_services")
+    .select("priority, service_catalog!inner(service_key, service_name, emergency_possible, active)")
+    .eq("tenant_id", tenantId)
+    .eq("enabled", true)
+    .eq("service_catalog.active", true)
+    .order("priority", { ascending: true });
+
+  if (error || !Array.isArray(data)) return [];
+
+  return data.flatMap((row) => {
+    const catalog = row.service_catalog;
+    if (!catalog || typeof catalog !== "object") return [];
+    const catalogJson = catalog as Json;
+    const serviceKey = getString(catalogJson, ["service_key"]);
+    const serviceName = getString(catalogJson, ["service_name"]);
+    if (!serviceKey || !serviceName) return [];
+    return [{
+      service_key: serviceKey,
+      service_name: serviceName,
+      emergency_possible: catalogJson.emergency_possible === true,
+    }];
+  });
+}
+
+async function getTenantMappedAreas(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string | null,
+): Promise<TenantMappedArea[]> {
+  if (!tenantId) return [];
+
+  const { data, error } = await supabase
+    .from("tenant_service_areas")
+    .select("county, city, zip_code")
+    .eq("tenant_id", tenantId)
+    .eq("active", true);
+
+  if (error || !Array.isArray(data)) return [];
+
+  return data.map((row) => ({
+    county: getString(row as Json, ["county"]),
+    city: getString(row as Json, ["city"]),
+    zip_code: getString(row as Json, ["zip_code"]),
+  }));
 }
 
 function dayKeyFromDate(date: Date): string {
@@ -436,7 +552,7 @@ async function handleCheckServiceability(
 
   const { data: client, error } = await supabase
     .from("clients")
-    .select("service_area_json, services_json")
+    .select("tenant_id, service_area_json, services_json")
     .eq("id", clientId)
     .single();
 
@@ -448,26 +564,42 @@ async function handleCheckServiceability(
     };
   }
 
-  const serviceAreas = Array.isArray(client.service_area_json) ? client.service_area_json : [];
-  const services = Array.isArray(client.services_json) ? client.services_json : [];
+  const tenantId = client.tenant_id ? String(client.tenant_id) : null;
+  const mappedAreas = await getTenantMappedAreas(supabase, tenantId);
+  const mappedServices = await getTenantMappedServices(supabase, tenantId);
+  const legacyServiceAreas = Array.isArray(client.service_area_json) ? client.service_area_json : [];
+  const legacyServices = Array.isArray(client.services_json) ? client.services_json : [];
+  const normalizedRequestedService = normalizeServiceToken(serviceType);
 
   const inServiceArea =
-    serviceAreas.length === 0 ||
-    serviceAreas.some((area) => {
-      if (!area || typeof area !== "object") return false;
-      const areaJson = area as Json;
-      const areaZip = getString(areaJson, ["zip"]);
-      const areaCity = getString(areaJson, ["city"]);
-      return (zip && areaZip === zip) || (city && areaCity?.toLowerCase() === city.toLowerCase());
-    });
+    mappedAreas.length > 0
+      ? mappedAreas.some((area) => {
+        const areaZip = area.zip_code;
+        const areaCity = area.city?.toLowerCase();
+        return (zip && areaZip === zip) || (city && areaCity === city.toLowerCase());
+      })
+      : legacyServiceAreas.length === 0 ||
+        legacyServiceAreas.some((area) => {
+          if (!area || typeof area !== "object") return false;
+          const areaJson = area as Json;
+          const areaZip = getString(areaJson, ["zip_code", "zip"]);
+          const areaCity = getString(areaJson, ["city"]);
+          return (zip && areaZip === zip) || (city && areaCity?.toLowerCase() === city.toLowerCase());
+        });
 
   const serviceSupported =
-    services.length === 0 ||
-    services.some((service) => String(service).trim().toLowerCase() === String(serviceType ?? "").toLowerCase());
+    mappedServices.length > 0
+      ? mappedServices.some((service) =>
+        normalizeServiceToken(service.service_key) === normalizedRequestedService ||
+        normalizeServiceToken(service.service_name) === normalizedRequestedService
+      )
+      : legacyServices.length === 0 ||
+        legacyServices.some((service) => normalizeServiceToken(String(service)) === normalizedRequestedService);
 
   return {
     in_service_area: inServiceArea,
     service_supported: serviceSupported,
+    matched_from: mappedServices.length > 0 || mappedAreas.length > 0 ? "tenant_mappings" : "legacy_client_json",
     recommended_action: !inServiceArea
       ? "Politely explain the company may not serve that area."
       : !serviceSupported
@@ -804,8 +936,12 @@ serve(async (req) => {
   });
 
   try {
+    const authError = verifyVapiBearer(req);
+    if (authError) return jsonResponse({ error: authError }, 401);
+
     const body = await req.json();
     const payload = body && typeof body === "object" ? body as Json : {};
+    const requestContext = headerContext(req);
     const message = payload.message;
 
     if (!message || typeof message !== "object") {
@@ -825,9 +961,13 @@ serve(async (req) => {
 
     for (const toolCall of toolCallList) {
       const args = { ...((toolCall.arguments ?? toolCall.parameters ?? {}) as Json) } as Json;
-      const resolvedClientId = await resolveClientId(supabase, payload, messageJson, callJson, args, vapiCallId);
+      const resolvedClientId = await resolveClientId(supabase, payload, messageJson, callJson, args, requestContext, vapiCallId);
       if (!getString(args, ["client_id"]) && resolvedClientId) {
         args.client_id = resolvedClientId;
+      }
+      if (!getString(args, ["tenant_id"])) {
+        const requestTenantId = getString(requestContext, ["tenant_id"]);
+        if (requestTenantId) args.tenant_id = requestTenantId;
       }
       let result: Record<string, unknown>;
 

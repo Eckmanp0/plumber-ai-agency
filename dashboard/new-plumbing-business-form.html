@@ -30,6 +30,7 @@
       color: var(--ink);
     }
 
+
     .container {
       max-width: 920px;
       margin: 0 auto;
@@ -107,7 +108,11 @@
       font-weight: normal;
     }
 
-    .inline-grid {
+	.float-right-button {
+	float: right; /* Floats the button to the right of its container */
+	}
+
+	.inline-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
@@ -185,7 +190,7 @@
 <body>
   <div class="auth-status" id="authStatus">Checking admin access...</div>
   <div class="container">
-    <h1>New Plumbing Business Form</h1>
+    <h1>New Plumbing Business Form</h1><a href="/admin_management"><button class="float-right-button">Return to Dashboard</button></a>
     <p class="intro">Use this form as the internal onboarding checklist for new plumbing tenants. Pilot accounts stay request-only, while full-service accounts are set up for calendar-direct booking, reminders, and follow-up automation when those features are enabled.</p>
 
     <form action="#" method="post">
@@ -246,8 +251,18 @@
             </select>
           </div>
           <div class="form-group">
+            <label for="googleSheetId">Existing Tenant Google Sheet ID</label>
+            <input type="text" id="googleSheetId" name="googleSheetId" placeholder="Use this when the client already has a sheet you want to keep" />
+          </div>
+        </div>
+        <div class="inline-grid" style="margin-top:16px;">
+          <div class="form-group">
             <label for="googleSheetTemplateId">Google Sheet Template ID</label>
             <input type="text" id="googleSheetTemplateId" name="googleSheetTemplateId" placeholder="Defaults to agency template if blank" />
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <div class="note">Use `Existing Tenant Google Sheet ID` when you want onboarding to attach a specific live sheet. Use `Google Sheet Template ID` only when you want onboarding to create a fresh copy.</div>
           </div>
         </div>
         <div class="note">Recommended pairing: `pilot` with `request_only`, and `full_service` with `calendar_direct` when a Google Calendar connection will be provisioned.</div>
@@ -321,6 +336,7 @@
       </fieldset>
 
       <button type="submit">Submit</button>
+      <div class="note" id="submitStatus" style="margin-top:14px;"></div>
     </form>
   </div>
 
@@ -330,6 +346,8 @@
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const authStatusEl = document.getElementById("authStatus");
     const containerEl = document.querySelector(".container");
+    const formEl = document.querySelector("form");
+    const submitStatusEl = document.getElementById("submitStatus");
 
     containerEl.classList.add("hidden");
 
@@ -352,13 +370,115 @@
       }
 
       if (!memberships || memberships.length === 0) {
-        window.location.href = "admin-dashboard?access=denied";
+        window.location.href = "login?dest=admin&access=denied";
         return;
       }
 
       authStatusEl.classList.add("hidden");
       containerEl.classList.remove("hidden");
     }
+
+    function normalizeList(text) {
+      return String(text || "")
+        .split(/[\n,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function normalizePhone(value) {
+      const digits = String(value || "").replace(/\D+/g, "");
+      if (!digits) return null;
+      if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+      return digits;
+    }
+
+    function normalizeEmail(value) {
+      const trimmed = String(value || "").trim().toLowerCase();
+      return trimmed || null;
+    }
+
+    function buildHoursJson(value) {
+      const normalized = String(value || "").trim();
+      if (!normalized) return {};
+      if (normalized.toLowerCase().includes("mon") || normalized.toLowerCase().includes("fri")) {
+        return {
+          mon: "8am-6pm",
+          tue: "8am-6pm",
+          wed: "8am-6pm",
+          thu: "8am-6pm",
+          fri: "8am-6pm",
+          sat: "9am-2pm",
+          sun: "closed",
+        };
+      }
+      return {};
+    }
+
+    formEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submitStatusEl.textContent = "Submitting onboarding...";
+
+      const formData = new FormData(formEl);
+      const businessPhone = normalizePhone(formData.get("businessPhone"));
+      const urgentPhone = normalizePhone(formData.get("urgentPhone")) || businessPhone;
+      const businessEmail = normalizeEmail(formData.get("businessEmail"));
+      const reportsEmail = normalizeEmail(formData.get("reportsEmail")) || businessEmail;
+      const selectedServices = Array.from(formEl.querySelectorAll('input[name="services[]"]:checked')).map((input) => {
+        const raw = input.value.toLowerCase().trim();
+        return raw.replace(/\s+/g, "_");
+      });
+
+      const payload = {
+        business_name: formData.get("businessName"),
+        owner_name: formData.get("ownerName"),
+        contact_phone: businessPhone,
+        contact_email: businessEmail,
+        phone: businessPhone,
+        email: businessEmail,
+        notification_sms: urgentPhone,
+        notification_email: reportsEmail,
+        urgent_alert_phone: urgentPhone,
+        reports_email: reportsEmail,
+        package_tier: formData.get("packageTier"),
+        booking_mode: formData.get("bookingMode"),
+        google_sheet_id: formData.get("googleSheetId") || null,
+        google_sheet_template_id: formData.get("googleSheetTemplateId") || null,
+        cities: normalizeList(formData.get("citiesServed")),
+        zips: normalizeList(formData.get("zipCodes")).flatMap((item) => {
+          const rangeMatch = item.match(/^(\d{5})\s*[--]\s*(\d{5})$/);
+          if (!rangeMatch) return [item];
+          const start = Number(rangeMatch[1]);
+          const end = Number(rangeMatch[2]);
+          if (Number.isNaN(start) || Number.isNaN(end) || end < start || end - start > 250) return [item];
+          const expanded = [];
+          for (let current = start; current <= end; current += 1) expanded.push(String(current));
+          return expanded;
+        }),
+        services: selectedServices,
+        hours_json: buildHoursJson(formData.get("operatingHours")),
+        emergency_enabled: formData.get("emergencyService") === "Yes",
+        same_day_allowed: formData.get("sameDayService") === "Yes",
+        booking_rules_json: {
+          same_day_allowed: formData.get("sameDayService") === "Yes",
+          default_slots: [
+            { label: "Tomorrow morning", date: "tomorrow", time: "8am-12pm" },
+            { label: "Tomorrow afternoon", date: "tomorrow", time: "12pm-4pm" }
+          ]
+        }
+      };
+
+      try {
+        const { data, error } = await supabaseClient.functions.invoke("onboard-client", {
+          body: payload
+        });
+
+        if (error) throw error;
+
+        submitStatusEl.textContent = `Created ${data.client_id}. Sheet: ${data.google_sheet_id || "none attached"}. Assistant mode: ${data.assistant_mode}.`;
+      } catch (error) {
+        submitStatusEl.textContent = error.message || "Onboarding failed.";
+      }
+    });
 
     requireAgencyAdmin();
   </script>

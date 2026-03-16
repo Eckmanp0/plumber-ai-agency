@@ -7,19 +7,38 @@
     "properties": {
       "customer": {
         "type": "object",
+        "description": "Identify the caller and the service location mentioned during the call.",
         "properties": {
-          "name": { "type": "string" },
-          "phone": { "type": "string" },
-          "service_address": { "type": "string" }
+          "name": {
+            "type": "string",
+            "description": "The caller's full name if provided. If only a first name is given, return that exact first name."
+          },
+          "phone": {
+            "type": "string",
+            "description": "The best callback phone number stated or confirmed during the call. Prefer the explicitly confirmed callback number."
+          },
+          "service_address": {
+            "type": "string",
+            "description": "The full service address where plumbing work is needed. Include street, city, and ZIP when spoken. Leave blank only if the caller refused or did not know the address."
+          }
         },
         "required": ["name", "phone"]
       },
       "job": {
         "type": "object",
+        "description": "Summarize the plumbing issue, requested service category, urgency, and whether the issue sounds bookable from the call.",
         "properties": {
-          "issue_description": { "type": "string" },
+          "issue_description": {
+            "type": "string",
+            "description": "A concise summary of the actual plumbing problem in the caller's own terms, such as clogged drain, leaking pipe, or water heater not working."
+          },
+          "requested_service_type_raw": {
+            "type": "string",
+            "description": "The caller's requested service type in their own words before normalization, such as leaking water heater, clogged kitchen sink, or sewer line issue."
+          },
           "service_type": {
             "type": "string",
+            "description": "Normalize the requested plumbing work into the closest allowed enum value. Use other when no listed category fits cleanly.",
             "enum": [
               "drain_cleaning",
               "leak_repair",
@@ -34,17 +53,27 @@
           },
           "urgency": {
             "type": "string",
+            "description": "Classify urgency from the conversation. Use emergency for active flooding, burst pipes, sewer backup, or major ongoing leaks. Use high when damage is actively occurring but not clearly emergency. Use medium or low for routine issues.",
             "enum": ["low", "medium", "high", "emergency"]
           },
-          "bookable": { "type": "boolean" }
+          "bookable": {
+            "type": "boolean",
+            "description": "True if the caller appears serviceable and the call can reasonably move toward booking or appointment request. False if the call is clearly out of area, unsupported, spam, or otherwise not a viable booking."
+          },
+          "preferred_time": {
+            "type": "string",
+            "description": "The caller's requested appointment date, time, or time window if they gave one, such as tomorrow morning, Friday after 2pm, or ASAP."
+          }
         },
         "required": ["issue_description", "service_type", "urgency"]
       },
       "outcome": {
         "type": "object",
+        "description": "Capture the final truthful disposition of the call and whether follow-up is needed.",
         "properties": {
           "call_outcome": {
             "type": "string",
+            "description": "Select the closest truthful final disposition of the call based on what actually happened by the end of the conversation.",
             "enum": [
               "booked",
               "pending_confirmation",
@@ -55,8 +84,22 @@
               "wrong_number"
             ]
           },
-          "summary": { "type": "string" },
-          "follow_up_required": { "type": "boolean" }
+          "summary": {
+            "type": "string",
+            "description": "A brief receptionist-style summary of who called, what they need, where service is needed if known, how urgent it is, and what the next step is."
+          },
+          "follow_up_required": {
+            "type": "boolean",
+            "description": "True if the plumber still needs to call back, confirm, review, or otherwise take action after the call. False only if the request is fully resolved, booked, spam, or clearly not moving forward."
+          },
+          "confidence_notes": {
+            "type": "string",
+            "description": "A short note about missing information, uncertainty, caller hesitation, or anything that may affect confidence in the extracted details or next step."
+          },
+          "plumber_action_summary": {
+            "type": "string",
+            "description": "A concise action summary for the plumber, such as call back to confirm slot, dispatch urgently, review unsupported request, or follow up on booking request."
+          }
         },
         "required": ["call_outcome", "summary"]
       }

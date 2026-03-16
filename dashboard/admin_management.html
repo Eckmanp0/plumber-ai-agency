@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agency Admin Management</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #09131f;
+      --panel: #112035;
+      --line: #2f4c6a;
+      --text: #eaf4ff;
+      --muted: #9db5ce;
+      --primary: #37d3a5;
+      --warning: #ffd166;
+      --danger: #ff7b7b;
+      --secondary: #7cc6ff;
+      --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: linear-gradient(165deg, #050b14 0%, #0b1628 45%, #0d1b2d 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .auth-status {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(124, 198, 255, 0.25);
+      border-radius: 12px;
+      background: rgba(124, 198, 255, 0.08);
+      color: var(--secondary);
+    }
+
+    .hidden { display: none; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 6px;
+      max-width: 60ch;
+      line-height: 1.6;
+    }
+
+    .pill {
+      border: 1px solid rgba(55, 211, 165, 0.5);
+      color: var(--primary);
+      background: rgba(55, 211, 165, 0.15);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .actions a,
+    .actions button {
+      width: auto;
+      min-width: 140px;
+      text-decoration: none;
+    }
+
+    .grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: rgba(17, 32, 53, 0.95);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .metrics {
+      grid-column: span 12;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      background: #1b2d45;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .metric h3 {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric p {
+      margin-top: 6px;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .activation,
+    .portfolio,
+    .ops,
+    .reports {
+      grid-column: span 6;
+    }
+
+    @media (max-width: 1120px) {
+      .activation,
+      .portfolio,
+      .ops,
+      .reports {
+        grid-column: span 12;
+      }
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    button {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 11px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .btn-primary { background: var(--primary); color: #05301f; }
+    .btn-secondary { background: #1a3658; color: var(--text); }
+    .btn-danger { background: rgba(255, 123, 123, 0.18); color: #ffd6d6; }
+
+    .table-wrap {
+      overflow: auto;
+      margin-top: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid #28425f;
+      padding: 9px 6px;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th { color: var(--muted); }
+
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .active { color: #032d1b; background: var(--primary); }
+    .paused { color: #523700; background: var(--warning); }
+    .alert { color: #3c0303; background: var(--danger); }
+    .neutral { color: #d7e8ff; background: #1b3858; }
+
+    .log-list {
+      list-style: none;
+      margin: 10px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .log-list li {
+      border: 1px solid #294762;
+      border-radius: 10px;
+      padding: 10px;
+      background: #0b1a2e;
+      line-height: 1.5;
+    }
+
+    .timestamp {
+      color: var(--muted);
+      margin-right: 6px;
+      font-size: 12px;
+    }
+
+    .tiny {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .form-group {
+      display: grid;
+      gap: 6px;
+    }
+
+    .form-group.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0b1a2e;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="auth-status" id="authStatus">Checking agency admin access...</div>
+
+    <div id="appShell" class="hidden">
+      <header>
+        <div>
+          <h1>PlumbConnect Agency Console</h1>
+          <p class="subtitle">Management view for tenant operations, booking readiness, emergency queue visibility, daily reporting, and direct links into onboarding and tenant administration.</p>
+        </div>
+        <div class="stack" style="align-items:flex-end;">
+          <span class="pill" id="workspacePill">Agency workspace</span>
+          <div class="actions">
+            <a class="btn-primary" href="new-plumbing-business-form">Onboard Tenant</a>
+            <a href="javascript: location.reload();"><button class="btn-secondary" id="refreshBtn" type="button">Refresh</button></a>
+            <button class="btn-danger" id="signOutBtn" type="button">Sign Out</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="metrics card">
+          <article class="metric"><h3>Managed Tenants</h3><p id="metricTenants">0</p></article>
+          <article class="metric"><h3>Active Clients</h3><p id="metricActiveClients">0</p></article>
+          <article class="metric"><h3>Calls Today</h3><p id="metricCalls">0</p></article>
+          <article class="metric"><h3>Booked Today</h3><p id="metricBooked">0</p></article>
+          <article class="metric"><h3>Callback Queue</h3><p id="metricCallback">0</p></article>
+          <article class="metric"><h3>Emergency Leads</h3><p id="metricEmergency">0</p></article>
+        </section>
+
+        <section class="activation card">
+          <h2>Tenant Management Panel</h2>
+          <p class="subtitle">Finish live tenant setup, edit client profile data, archive inactive accounts, or remove test tenants here without leaving the admin console.</p>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="activationTenant">Tenant</label>
+              <select id="activationTenant"></select>
+            </div>
+            <div class="form-group">
+              <label for="activationAssistant">Recommended Assistant</label>
+              <input id="activationAssistant" type="text" readonly />
+            </div>
+            <div class="form-group">
+              <label for="activationBusinessName">Business Name</label>
+              <input id="activationBusinessName" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationOwnerName">Owner Name</label>
+              <input id="activationOwnerName" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationBusinessPhone">Business Phone</label>
+              <input id="activationBusinessPhone" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationBusinessEmail">Business Email</label>
+              <input id="activationBusinessEmail" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationFallback">Fallback Destination</label>
+              <input id="activationFallback" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationVapiNumberId">Vapi Phone Number ID</label>
+              <input id="activationVapiNumberId" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationUrgentPhone">Emergency / Alert Phone</label>
+              <input id="activationUrgentPhone" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationReportsEmail">Reports Email</label>
+              <input id="activationReportsEmail" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationPackageTier">Package Tier</label>
+              <select id="activationPackageTier">
+                <option value="pilot">Pilot</option>
+                <option value="full_service">Full Service</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="activationBookingMode">Booking Mode</label>
+              <select id="activationBookingMode">
+                <option value="request_only">Request Only</option>
+                <option value="calendar_direct">Calendar Direct</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="activationSheetId">Live Google Sheet ID</label>
+              <input id="activationSheetId" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationTemplateId">Template Sheet ID</label>
+              <input id="activationTemplateId" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="activationOpsState">Operational Readiness</label>
+              <input id="activationOpsState" type="text" readonly />
+            </div>
+            <div class="form-group">
+              <label for="activationClientState">Client State</label>
+              <input id="activationClientState" type="text" readonly />
+            </div>
+            <div class="form-group full">
+              <label for="activationHeaders">Vapi Headers</label>
+              <textarea id="activationHeaders" readonly></textarea>
+            </div>
+            <div class="form-group full">
+              <div class="actions">
+                <button class="btn-primary" id="saveActivationBtn" type="button">Save Client Changes</button>
+                <button class="btn-secondary" id="copyHeadersBtn" type="button">Copy Headers</button>
+                <button class="btn-secondary" id="archiveClientBtn" type="button">Archive Client</button>
+                <button class="btn-secondary" id="reactivateClientBtn" type="button">Reactivate Client</button>
+                <button class="btn-danger" id="deleteClientBtn" type="button">Delete Client</button>
+              </div>
+              <div class="helper" id="activationStatus">Select a tenant to load profile fields, live activation values, and client lifecycle actions.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="portfolio card">
+          <h2>Tenant Portfolio</h2>
+          <p class="subtitle">Platform readiness and current configuration for the tenant selected in the management panel.</p>
+          <div class="table-wrap">
+            <table id="clientsTable"></table>
+          </div>
+        </section>
+
+        <section class="ops card">
+          <h2>Operational Snapshot</h2>
+          <p class="subtitle">Selected tenant daily counts and current operational posture.</p>
+          <div class="stack" id="opsSummary"></div>
+        </section>
+
+        <section class="reports card">
+          <h2>Daily Report View</h2>
+          <p class="subtitle">Agency-wide daily rollup across all tenants. This stays global even while you are editing a selected tenant.</p>
+          <div class="table-wrap">
+            <table id="dailyReportTable"></table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lxkfjannfjfetfjfwuaf.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_hmYHicDbdl4xpuo5WQ9RLQ_bu24mUdD";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const authStatusEl = document.getElementById("authStatus");
+    const appShellEl = document.getElementById("appShell");
+    const activationTenantEl = document.getElementById("activationTenant");
+    const activationAssistantEl = document.getElementById("activationAssistant");
+    const activationBusinessNameEl = document.getElementById("activationBusinessName");
+    const activationOwnerNameEl = document.getElementById("activationOwnerName");
+    const activationBusinessPhoneEl = document.getElementById("activationBusinessPhone");
+    const activationBusinessEmailEl = document.getElementById("activationBusinessEmail");
+    const activationFallbackEl = document.getElementById("activationFallback");
+    const activationVapiNumberIdEl = document.getElementById("activationVapiNumberId");
+    const activationUrgentPhoneEl = document.getElementById("activationUrgentPhone");
+    const activationReportsEmailEl = document.getElementById("activationReportsEmail");
+    const activationPackageTierEl = document.getElementById("activationPackageTier");
+    const activationBookingModeEl = document.getElementById("activationBookingMode");
+    const activationSheetIdEl = document.getElementById("activationSheetId");
+    const activationTemplateIdEl = document.getElementById("activationTemplateId");
+    const activationHeadersEl = document.getElementById("activationHeaders");
+    const activationOpsStateEl = document.getElementById("activationOpsState");
+    const activationClientStateEl = document.getElementById("activationClientState");
+    const activationStatusEl = document.getElementById("activationStatus");
+    let currentClients = [];
+    let currentSheetRoutes = new Map();
+    let currentCalendars = new Map();
+    let currentDailyResults = [];
+    let currentMonthlyUsage = new Map();
+
+    function formatDateTime(value) {
+      if (!value) return "Not set";
+      return new Date(value).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    }
+
+    function currentMonthKey() {
+      const now = new Date();
+      return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function statusPill(value) {
+      const safe = String(value || "unknown").toLowerCase();
+      let cls = "neutral";
+      if (safe === "active" || safe === "booked") cls = "active";
+      else if (safe === "paused" || safe === "pending") cls = "paused";
+      else if (safe === "callback" || safe === "emergency") cls = "alert";
+      return `<span class="status ${cls}">${safe.replace(/_/g, " ")}</span>`;
+    }
+
+    function renderOpsStatus(client, calendarByTenant) {
+      const flags = client.feature_flags_json || {};
+      const parts = [];
+      parts.push(client.google_sheet_id ? '<span class="status active">sheet ready</span>' : '<span class="status paused">sheet missing</span>');
+      parts.push(client.vapi_assistant_id ? '<span class="status active">assistant linked</span>' : '<span class="status paused">assistant missing</span>');
+      if (calendarByTenant.has(client.tenant_id)) parts.push('<span class="status active">calendar connected</span>');
+      else if (flags.calendar_enabled) parts.push('<span class="status paused">calendar pending</span>');
+      if (flags.outbound_followups_enabled) parts.push('<span class="status neutral">follow-ups on</span>');
+      if (flags.reminders_enabled) parts.push('<span class="status neutral">reminders on</span>');
+      return parts.join(" ");
+    }
+
+    function recommendedAssistantLabel(client) {
+      return client.package_tier === "full_service" ? "shared full_service" : "shared pilot";
+    }
+
+    function readinessSummary(client) {
+      const checks = [
+        client.google_sheet_id ? "sheet attached" : "sheet missing",
+        client.vapi_assistant_id ? "assistant linked" : "assistant missing",
+        client.vapi_phone_number_id ? "vapi number bound" : "vapi number missing",
+      ];
+      return checks.join(" | ");
+    }
+
+    function buildHeaderBlock(client) {
+      return [
+        `x-vapi-tenant-id: ${client.tenant_id || ""}`,
+        `x-vapi-client-id: ${client.id || ""}`,
+        `x-vapi-business-name: ${client.business_name || ""}`,
+      ].join("\n");
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function normalizePhone(value) {
+      const digits = String(value || "").replace(/\D+/g, "");
+      if (!digits) return null;
+      if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+      return digits;
+    }
+
+    function normalizeEmail(value) {
+      const trimmed = String(value || "").trim().toLowerCase();
+      return trimmed || null;
+    }
+
+    function dedupeDailyResults(rows, visibleClientIds) {
+      const visibleClientIdSet = new Set(visibleClientIds);
+      const unique = new Map();
+
+      rows
+        .filter((row) => visibleClientIdSet.has(row.client_id))
+        .forEach((row) => {
+          if (!unique.has(row.client_id)) unique.set(row.client_id, row);
+        });
+
+      return Array.from(unique.values());
+    }
+
+    function renderSelectedTenantPanels(client) {
+      const portfolioTable = document.getElementById("clientsTable");
+      const opsSummary = document.getElementById("opsSummary");
+
+      if (!client) {
+        portfolioTable.innerHTML = '<tbody><tr><td>No tenant selected.</td></tr></tbody>';
+        opsSummary.innerHTML = '<div class="empty">Select a tenant in the management panel to load daily counts and readiness details.</div>';
+        return;
+      }
+
+      const flags = client.feature_flags_json || {};
+      const calendarConnection = currentCalendars.get(client.tenant_id);
+      const reportRow = currentDailyResults.find((row) => row.client_id === client.id) || {
+        calls_today: 0,
+        leads_today: 0,
+        booked_today: 0,
+        callback_required_today: 0,
+      };
+      const usageRow = currentMonthlyUsage.get(client.id) || {
+        total_calls: 0,
+        qualified_leads: 0,
+        booked_jobs: 0,
+        minutes_used: 0,
+        estimated_cost: 0,
+        invoice_amount: 0,
+      };
+
+      portfolioTable.innerHTML = `
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Value</th>
+            <th>Readiness</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Business</td>
+            <td><strong>${escapeHtml(client.business_name || "Unknown client")}</strong><br /><span class="tiny">${escapeHtml(client.id)}</span></td>
+            <td>${statusPill(client.active === false ? "archived" : "active")}</td>
+          </tr>
+          <tr>
+            <td>Package / Booking</td>
+            <td>${escapeHtml(String(client.package_tier || "pilot").replace(/_/g, " "))} | ${escapeHtml(String(client.booking_mode || "request_only").replace(/_/g, " "))}</td>
+            <td>${statusPill(recommendedAssistantLabel(client))}</td>
+          </tr>
+          <tr>
+            <td>Google Sheet</td>
+            <td>${escapeHtml(client.google_sheet_id || "Not attached")}</td>
+            <td>${client.google_sheet_id ? '<span class="status active">ready</span>' : '<span class="status paused">missing</span>'}</td>
+          </tr>
+          <tr>
+            <td>Vapi Number</td>
+            <td>${escapeHtml(client.vapi_phone_number_id || "Not bound")}</td>
+            <td>${client.vapi_phone_number_id ? '<span class="status active">bound</span>' : '<span class="status paused">pending</span>'}</td>
+          </tr>
+          <tr>
+            <td>Assistant / Calendar</td>
+            <td>${escapeHtml(client.vapi_assistant_id || "No assistant id saved")}<br /><span class="tiny">${escapeHtml(calendarConnection?.calendar_id || "No active calendar connection")}</span></td>
+            <td>${calendarConnection ? '<span class="status active">calendar connected</span>' : (flags.calendar_enabled ? '<span class="status paused">calendar pending</span>' : '<span class="status neutral">calendar off</span>')}</td>
+          </tr>
+          <tr>
+            <td>Notifications</td>
+            <td>${escapeHtml(client.urgent_alert_phone || "No alert phone")}<br /><span class="tiny">${escapeHtml(client.reports_email || "No reports email")}</span></td>
+            <td>${flags.reminders_enabled ? '<span class="status neutral">reminders on</span>' : '<span class="status paused">reminders off</span>'}</td>
+          </tr>
+          <tr>
+            <td>Last Update Context</td>
+            <td>${escapeHtml(readinessSummary(client))}</td>
+            <td>${flags.outbound_followups_enabled ? '<span class="status neutral">follow-ups on</span>' : '<span class="status paused">follow-ups off</span>'}</td>
+          </tr>
+          <tr>
+            <td>Month To Date</td>
+            <td>
+              ${escapeHtml(currentMonthKey())}<br />
+              <span class="tiny">calls ${usageRow.total_calls ?? 0} | leads ${usageRow.qualified_leads ?? 0} | booked ${usageRow.booked_jobs ?? 0}</span><br />
+              <span class="tiny">minutes ${Number(usageRow.minutes_used ?? 0).toFixed(1)} | invoice $${Number(usageRow.invoice_amount ?? 0).toFixed(2)}</span>
+            </td>
+            <td><span class="status neutral">mtd seeded</span></td>
+          </tr>
+        </tbody>
+      `;
+
+      opsSummary.innerHTML = `
+        <div>
+          <strong>${escapeHtml(client.business_name)}</strong><br />
+          <span class="tiny">Today | calls: ${reportRow.calls_today} | leads: ${reportRow.leads_today} | booked: ${reportRow.booked_today} | callback: ${reportRow.callback_required_today}</span>
+        </div>
+        <div>
+          <strong>Readiness</strong><br />
+          <span class="tiny">${escapeHtml(readinessSummary(client))}</span>
+        </div>
+        <div>
+          <strong>Month To Date</strong><br />
+          <span class="tiny">calls: ${usageRow.total_calls ?? 0} | leads: ${usageRow.qualified_leads ?? 0} | booked: ${usageRow.booked_jobs ?? 0} | minutes: ${Number(usageRow.minutes_used ?? 0).toFixed(1)} | invoice: $${Number(usageRow.invoice_amount ?? 0).toFixed(2)}</span>
+        </div>
+        <div>
+          <strong>Feature Flags</strong><br />
+          <span class="tiny">
+            sheets: ${flags.google_sheets_enabled ? "on" : "off"} |
+            calendar: ${flags.calendar_enabled ? "on" : "off"} |
+            reminders: ${flags.reminders_enabled ? "on" : "off"} |
+            follow-ups: ${flags.outbound_followups_enabled ? "on" : "off"}
+          </span>
+        </div>
+      `;
+    }
+
+    async function syncSheetRoute(client, spreadsheetId) {
+      if (!client?.id || !client?.tenant_id) return;
+      const trimmedSheetId = String(spreadsheetId || "").trim();
+      const existingRoute = currentSheetRoutes.get(client.id);
+
+      if (!trimmedSheetId) {
+        const { error } = await supabaseClient
+          .from("client_sheet_routes")
+          .update({ active: false })
+          .eq("client_id", client.id);
+        if (error) throw error;
+        if (existingRoute) currentSheetRoutes.set(client.id, { ...existingRoute, active: false });
+        return;
+      }
+
+      if (!existingRoute && trimmedSheetId === (client.google_sheet_id || "")) {
+        return;
+      }
+
+      if (!existingRoute) {
+        throw new Error("No sheet route exists for this client yet. Keep the current sheet id or recreate the route through onboarding before changing it here.");
+      }
+
+      const routePayload = {
+        client_id: client.id,
+        tenant_id: client.tenant_id,
+        webhook_url: existingRoute.webhook_url,
+        webhook_bearer: existingRoute.webhook_bearer || null,
+        spreadsheet_id: trimmedSheetId,
+        tab_name: existingRoute.tab_name || "New Leads",
+        active: true,
+      };
+
+      const { error } = await supabaseClient
+        .from("client_sheet_routes")
+        .upsert(routePayload, { onConflict: "client_id" });
+
+      if (error) throw error;
+      currentSheetRoutes.set(client.id, routePayload);
+    }
+
+    async function syncTenantState(client, updates) {
+      const tenantPayload = {};
+      if (updates.business_name) tenantPayload.name = updates.business_name;
+      if (updates.package_tier) tenantPayload.package_tier = updates.package_tier;
+      if (updates.tenant_status) tenantPayload.status = updates.tenant_status;
+      if (!Object.keys(tenantPayload).length) return;
+
+      const { error } = await supabaseClient
+        .from("tenants")
+        .update(tenantPayload)
+        .eq("id", client.tenant_id);
+
+      if (error) throw error;
+    }
+
+    function loadActivationTenant(clientId) {
+      const client = currentClients.find((item) => item.id === clientId);
+      if (!client) return;
+      activationBusinessNameEl.value = client.business_name || "";
+      activationOwnerNameEl.value = client.owner_name || "";
+      activationBusinessPhoneEl.value = client.phone || client.contact_phone || "";
+      activationBusinessEmailEl.value = client.email || client.contact_email || "";
+      activationFallbackEl.value = client.phone || client.contact_phone || "";
+      activationVapiNumberIdEl.value = client.vapi_phone_number_id || "";
+      activationUrgentPhoneEl.value = client.urgent_alert_phone || "";
+      activationReportsEmailEl.value = client.reports_email || "";
+      activationPackageTierEl.value = client.package_tier || "pilot";
+      activationBookingModeEl.value = client.booking_mode || "request_only";
+      activationSheetIdEl.value = client.google_sheet_id || "";
+      activationTemplateIdEl.value = client.google_sheet_template_id || "";
+      activationAssistantEl.value = recommendedAssistantLabel(client);
+      activationHeadersEl.value = buildHeaderBlock(client);
+      activationOpsStateEl.value = readinessSummary(client);
+      activationClientStateEl.value = client.active === false ? "archived" : "active";
+      activationStatusEl.textContent = `Loaded ${client.business_name}. Save here after you update profile details, bind a Vapi number, or change the live Google Sheet.`;
+      renderSelectedTenantPanels(client);
+    }
+
+    async function saveActivationFields() {
+      const clientId = activationTenantEl.value;
+      const client = currentClients.find((item) => item.id === clientId);
+      if (!client) return;
+
+      activationStatusEl.textContent = "Saving client changes...";
+      const normalizedBusinessPhone = normalizePhone(activationBusinessPhoneEl.value);
+      const normalizedFallbackPhone = normalizePhone(activationFallbackEl.value);
+      const normalizedUrgentPhone = normalizePhone(activationUrgentPhoneEl.value);
+      const normalizedBusinessEmail = normalizeEmail(activationBusinessEmailEl.value);
+      const normalizedReportsEmail = normalizeEmail(activationReportsEmailEl.value);
+      const trimmedBusinessName = activationBusinessNameEl.value.trim() || client.business_name;
+      const trimmedOwnerName = activationOwnerNameEl.value.trim() || null;
+      const trimmedSheetId = activationSheetIdEl.value.trim() || null;
+      const trimmedTemplateId = activationTemplateIdEl.value.trim() || null;
+      const trimmedVapiNumberId = activationVapiNumberIdEl.value.trim() || null;
+
+      const payload = {
+        business_name: trimmedBusinessName,
+        owner_name: trimmedOwnerName,
+        phone: normalizedBusinessPhone,
+        contact_phone: normalizedBusinessPhone,
+        email: normalizedBusinessEmail,
+        contact_email: normalizedBusinessEmail,
+        urgent_alert_phone: normalizedUrgentPhone || normalizedFallbackPhone || normalizedBusinessPhone,
+        reports_email: normalizedReportsEmail || normalizedBusinessEmail,
+        notification_sms: normalizedUrgentPhone || normalizedFallbackPhone || normalizedBusinessPhone,
+        notification_email: normalizedReportsEmail || normalizedBusinessEmail,
+        vapi_phone_number_id: trimmedVapiNumberId,
+        google_sheet_id: trimmedSheetId,
+        google_sheet_template_id: trimmedTemplateId,
+        package_tier: activationPackageTierEl.value,
+        booking_mode: activationBookingModeEl.value,
+      };
+
+      await syncTenantState(client, {
+        business_name: trimmedBusinessName,
+        package_tier: activationPackageTierEl.value,
+        tenant_status: client.active === false ? "inactive" : "active",
+      });
+
+      const { data, error } = await supabaseClient
+        .from("clients")
+        .update(payload)
+        .eq("id", clientId)
+        .select("id, tenant_id, business_name, owner_name, package_tier, booking_mode, feature_flags_json, google_sheet_id, google_sheet_template_id, vapi_assistant_id, vapi_phone_number_id, created_at, phone, contact_phone, email, contact_email, reports_email, urgent_alert_phone, active")
+        .single();
+
+      if (error) {
+        activationStatusEl.textContent = error.message;
+        return;
+      }
+
+      await syncSheetRoute({ id: data.id, tenant_id: data.tenant_id }, trimmedSheetId);
+
+      const index = currentClients.findIndex((item) => item.id === clientId);
+      if (index >= 0) currentClients[index] = data;
+      currentDailyResults = currentDailyResults.map((row) => row.client_id === clientId ? {
+        ...row,
+        business_name: data.business_name,
+        package_tier: data.package_tier,
+        booking_mode: data.booking_mode,
+      } : row);
+      loadActivationTenant(clientId);
+      activationStatusEl.textContent = `Saved ${data.business_name}. Profile, sheet route, and activation fields are now synced in Supabase.`;
+    }
+
+    async function setClientLifecycleState(action) {
+      const clientId = activationTenantEl.value;
+      const client = currentClients.find((item) => item.id === clientId);
+      if (!client) return;
+
+      if (action === "delete") {
+        const confirmation = window.prompt(`Type DELETE to permanently remove ${client.business_name} and its tenant history.`);
+        if (confirmation !== "DELETE") {
+          activationStatusEl.textContent = "Delete cancelled.";
+          return;
+        }
+
+        activationStatusEl.textContent = `Deleting ${client.business_name}...`;
+        const { error } = await supabaseClient
+          .from("tenants")
+          .delete()
+          .eq("id", client.tenant_id);
+
+        if (error) {
+          activationStatusEl.textContent = error.message;
+          return;
+        }
+
+        currentClients = currentClients.filter((item) => item.id !== clientId);
+        activationStatusEl.textContent = `Deleted ${client.business_name}.`;
+        await loadManagementView();
+        return;
+      }
+
+      const nextActive = action === "reactivate";
+      activationStatusEl.textContent = `${nextActive ? "Reactivating" : "Archiving"} ${client.business_name}...`;
+
+      await syncTenantState(client, {
+        business_name: client.business_name,
+        package_tier: client.package_tier,
+        tenant_status: nextActive ? "active" : "inactive",
+      });
+
+      const { data, error } = await supabaseClient
+        .from("clients")
+        .update({ active: nextActive })
+        .eq("id", clientId)
+        .select("id, tenant_id, business_name, owner_name, package_tier, booking_mode, feature_flags_json, google_sheet_id, google_sheet_template_id, vapi_assistant_id, vapi_phone_number_id, created_at, phone, contact_phone, email, contact_email, reports_email, urgent_alert_phone, active")
+        .single();
+
+      if (error) {
+        activationStatusEl.textContent = error.message;
+        return;
+      }
+
+      const index = currentClients.findIndex((item) => item.id === clientId);
+      if (index >= 0) currentClients[index] = data;
+      loadActivationTenant(clientId);
+      activationStatusEl.textContent = `${nextActive ? "Reactivated" : "Archived"} ${data.business_name}.`;
+      await loadManagementView();
+    }
+
+    async function requireAgencyAdmin() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) {
+        window.location.href = "login?dest=admin";
+        return null;
+      }
+
+      const { data: memberships, error } = await supabaseClient
+        .from("tenant_users")
+        .select("tenant_id, role")
+        .eq("role", "agency_admin");
+
+      if (error) throw error;
+      if (!memberships || memberships.length === 0) {
+        window.location.href = "login?dest=admin&access=denied";
+        return null;
+      }
+
+      return memberships;
+    }
+
+    async function loadManagementView() {
+      const memberships = await requireAgencyAdmin();
+      if (!memberships) return;
+
+      authStatusEl.classList.add("hidden");
+      appShellEl.classList.remove("hidden");
+      document.getElementById("workspacePill").textContent = "Agency admin | full tenant access";
+
+      const { data: allTenants, error: allTenantsError } = await supabaseClient
+        .from("tenants")
+        .select("id");
+
+      if (allTenantsError) throw allTenantsError;
+
+      const tenantIds = [...new Set((allTenants || []).map((tenant) => tenant.id).filter(Boolean))];
+
+      const monthKey = currentMonthKey();
+      const [clientsRes, callsRes, leadsRes, appointmentsRes, calendarRes, sheetRoutesRes, monthlyUsageRes, reportsRes] = await Promise.all([
+        supabaseClient
+          .from("clients")
+          .select("id, tenant_id, business_name, owner_name, package_tier, booking_mode, feature_flags_json, google_sheet_id, google_sheet_template_id, vapi_assistant_id, vapi_phone_number_id, created_at, phone, contact_phone, email, contact_email, reports_email, urgent_alert_phone, active")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false }),
+        supabaseClient
+          .from("calls")
+          .select("tenant_id, summary, call_outcome, created_at")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        supabaseClient
+          .from("leads")
+          .select("tenant_id, caller_name, caller_phone, service_address, issue_description, urgency_level, status, created_at")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false })
+          .limit(30),
+        supabaseClient
+          .from("appointments")
+          .select("tenant_id, lead_id, booked_start, booked_end, status, external_event_id, notes, created_at")
+          .in("tenant_id", tenantIds)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        supabaseClient
+          .from("calendar_connections")
+          .select("tenant_id, calendar_id, active")
+          .in("tenant_id", tenantIds)
+          .eq("active", true),
+        supabaseClient
+          .from("client_sheet_routes")
+          .select("client_id, tenant_id, webhook_url, webhook_bearer, spreadsheet_id, tab_name, active")
+          .in("tenant_id", tenantIds),
+        supabaseClient
+          .from("monthly_usage")
+          .select("client_id, month, total_calls, qualified_leads, booked_jobs, minutes_used, estimated_cost, invoice_amount")
+          .in("tenant_id", tenantIds)
+          .eq("month", monthKey),
+        supabaseClient.functions.invoke("reports-daily", {
+          body: { tenant_ids: tenantIds },
+        }),
+      ]);
+
+      [clientsRes, callsRes, leadsRes, appointmentsRes, calendarRes, sheetRoutesRes, monthlyUsageRes].forEach((res) => {
+        if (res.error) throw res.error;
+      });
+      if (reportsRes.error) throw reportsRes.error;
+
+      const clients = clientsRes.data || [];
+      currentClients = clients;
+      const calls = callsRes.data || [];
+      const leads = leadsRes.data || [];
+      const appointments = appointmentsRes.data || [];
+      const calendars = calendarRes.data || [];
+      const sheetRoutes = sheetRoutesRes.data || [];
+      const monthlyUsageRows = monthlyUsageRes.data || [];
+      const dailyResults = dedupeDailyResults(reportsRes.data?.results || [], clients.map((client) => client.id));
+
+      const calendarByTenant = new Map(calendars.map((row) => [row.tenant_id, row]));
+      currentSheetRoutes = new Map(sheetRoutes.map((route) => [route.client_id, route]));
+      currentCalendars = calendarByTenant;
+      currentMonthlyUsage = new Map(monthlyUsageRows.map((row) => [row.client_id, row]));
+
+      const activeClients = clients.filter((client) => {
+        const flags = client.feature_flags_json || {};
+        return client.active !== false && (client.vapi_assistant_id || flags.google_sheets_enabled);
+      });
+      const bookedToday = leads.filter((lead) => lead.status === "booked").length;
+      const callbackToday = leads.filter((lead) => lead.status === "callback").length;
+      const emergencyToday = leads.filter((lead) => ["high", "emergency"].includes(String(lead.urgency_level || "").toLowerCase())).length;
+
+      document.getElementById("metricTenants").textContent = String(tenantIds.length);
+      document.getElementById("metricActiveClients").textContent = String(activeClients.length);
+      document.getElementById("metricCalls").textContent = String(calls.length);
+      document.getElementById("metricBooked").textContent = String(bookedToday);
+      document.getElementById("metricCallback").textContent = String(callbackToday);
+      document.getElementById("metricEmergency").textContent = String(emergencyToday);
+
+      const currentSelection = activationTenantEl.value;
+      activationTenantEl.innerHTML = clients.map((client) => `<option value="${client.id}">${client.business_name}${client.active === false ? " (archived)" : ""}</option>`).join("");
+      currentDailyResults = dailyResults;
+      if (clients.length) {
+        const selectedClientId = clients.some((client) => client.id === currentSelection) ? currentSelection : clients[0].id;
+        activationTenantEl.value = selectedClientId;
+        loadActivationTenant(selectedClientId);
+      } else {
+        renderSelectedTenantPanels(null);
+      }
+
+      document.getElementById("dailyReportTable").innerHTML = `
+        <thead>
+          <tr>
+            <th>Business</th>
+            <th>Calls Today</th>
+            <th>Leads Today</th>
+            <th>Booked Today</th>
+            <th>Callback Required</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dailyResults.map((row) => `
+            <tr>
+              <td>${row.business_name || row.client_id}</td>
+              <td>${row.calls_today}</td>
+              <td>${row.leads_today}</td>
+              <td>${row.booked_today}</td>
+              <td>${row.callback_required_today}</td>
+            </tr>
+          `).join("") || '<tr><td colspan="5">Daily report unavailable.</td></tr>'}
+        </tbody>
+      `;
+
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", () => {
+      loadManagementView().catch((error) => {
+        authStatusEl.classList.remove("hidden");
+        authStatusEl.textContent = error.message;
+      });
+    });
+    activationTenantEl.addEventListener("change", () => loadActivationTenant(activationTenantEl.value));
+    document.getElementById("saveActivationBtn").addEventListener("click", () => {
+      saveActivationFields().catch((error) => {
+        activationStatusEl.textContent = error.message;
+      });
+    });
+    document.getElementById("archiveClientBtn").addEventListener("click", () => {
+      setClientLifecycleState("archive").catch((error) => {
+        activationStatusEl.textContent = error.message;
+      });
+    });
+    document.getElementById("reactivateClientBtn").addEventListener("click", () => {
+      setClientLifecycleState("reactivate").catch((error) => {
+        activationStatusEl.textContent = error.message;
+      });
+    });
+    document.getElementById("deleteClientBtn").addEventListener("click", () => {
+      setClientLifecycleState("delete").catch((error) => {
+        activationStatusEl.textContent = error.message;
+      });
+    });
+    document.getElementById("copyHeadersBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(activationHeadersEl.value);
+        activationStatusEl.textContent = "Copied Vapi headers to clipboard.";
+      } catch {
+        activationStatusEl.textContent = "Could not copy automatically. You can still copy the header block manually.";
+      }
+    });
+
+    document.getElementById("signOutBtn").addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      window.location.href = "login?dest=admin";
+    });
+  
+    loadManagementView().catch((error) => {
+      authStatusEl.classList.remove("hidden");
+      authStatusEl.textContent = error.message;
+    });
+  </script>
+</body>
+</html>

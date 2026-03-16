@@ -1,4 +1,7 @@
 .env
+.env.local
+keys-private.*
+secrets-private.*
 pages-deploy/
 supabase/.temp/
 *.log

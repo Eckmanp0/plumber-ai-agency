@@ -3,222 +3,401 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Client Dashboard</title>
+  <title>PlumbConnect Client Console</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --ink: #122027;
-      --muted: #5e6d75;
-      --paper: #f2f5f7;
-      --panel: #ffffff;
-      --line: rgba(18, 32, 39, 0.09);
-      --accent: #0b7a75;
-      --accent-2: #eb6b2d;
-      --shadow: 0 18px 36px rgba(18, 32, 39, 0.08);
+      --bg: #09131f;
+      --panel: #112035;
+      --line: #2f4c6a;
+      --text: #eaf4ff;
+      --muted: #9db5ce;
+      --primary: #37d3a5;
+      --warning: #ffd166;
+      --danger: #ff7b7b;
+      --secondary: #7cc6ff;
+      --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
     }
 
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Trebuchet MS", "Gill Sans", sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top right, rgba(11,122,117,0.11), transparent 26%),
-        linear-gradient(180deg, #f8fbfc 0%, #eef3f5 100%);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: linear-gradient(165deg, #050b14 0%, #0b1628 45%, #0d1b2d 100%);
       min-height: 100vh;
     }
 
-    header {
-      padding: 28px 24px 12px;
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
     }
 
-    .topbar {
+    .auth-status {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(124, 198, 255, 0.25);
+      border-radius: 12px;
+      background: rgba(124, 198, 255, 0.08);
+      color: var(--secondary);
+    }
+
+    header {
       display: flex;
       justify-content: space-between;
       gap: 16px;
-      align-items: center;
+      align-items: flex-start;
       flex-wrap: wrap;
+      margin-bottom: 18px;
     }
 
+    h1, h2, h3, p { margin: 0; }
     h1 {
-      margin: 0;
       font-size: clamp(2rem, 4vw, 3rem);
       letter-spacing: -0.03em;
     }
 
-    .subtitle { color: var(--muted); margin-top: 8px; }
-
-    .shell {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 0 24px 40px;
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+      max-width: 70ch;
+      line-height: 1.6;
     }
 
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    button, select {
-      border-radius: 12px;
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button, select, input, textarea {
+      font: inherit;
+      border-radius: 10px;
       border: 1px solid var(--line);
-      padding: 12px 14px;
-      background: var(--panel);
-      color: var(--ink);
-      font-weight: 600;
+      background: #0b1a2e;
+      color: var(--text);
+      padding: 11px 14px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
     }
 
     button.primary {
-      background: var(--accent);
-      color: white;
-      border: none;
+      background: var(--primary);
+      color: #05301f;
     }
 
-    .grid {
+    button.secondary {
+      background: #1a3658;
+      color: var(--text);
+    }
+
+    button.danger {
+      background: rgba(255, 123, 123, 0.18);
+      color: var(--danger);
+      border-color: var(--line);
+    }
+
+    .status-line {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .metrics {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin: 24px 0;
+      gap: 14px;
+      margin: 22px 0;
     }
 
-    .card, .table-card {
-      background: var(--panel);
+    .metric {
+      background: #1b2d45;
       border: 1px solid var(--line);
-      border-radius: 22px;
+      border-radius: 12px;
+      padding: 12px;
       box-shadow: var(--shadow);
     }
 
-    .card {
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
+    .metric-label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
     }
 
-    .card::after {
-      content: "";
-      position: absolute;
-      inset: auto -14px -24px auto;
-      width: 92px;
-      height: 92px;
-      border-radius: 50%;
-      background: rgba(235, 107, 45, 0.08);
+    .metric-value {
+      margin-top: 6px;
+      font-size: 24px;
+      font-weight: 800;
     }
-
-    .metric-label { color: var(--muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
-    .metric-value { font-size: 2.2rem; margin-top: 10px; font-weight: 700; }
 
     .layout {
       display: grid;
-      grid-template-columns: 1.4fr 0.9fr;
+      grid-template-columns: 1.35fr 0.95fr;
       gap: 18px;
     }
 
-    .table-card { padding: 18px; }
-    .table-card h2, .side-card h2 { margin: 0 0 12px; font-size: 1.1rem; }
+    .card {
+      background: rgba(17, 32, 53, 0.95);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.95rem;
+      font-size: 0.93rem;
     }
 
     th, td {
       text-align: left;
-      padding: 12px 10px;
-      border-bottom: 1px solid var(--line);
+      padding: 9px 6px;
+      border-bottom: 1px solid #28425f;
       vertical-align: top;
     }
 
     th {
       color: var(--muted);
-      font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      font-size: 0.76rem;
     }
 
-    .side-stack { display: grid; gap: 18px; }
-    .side-card {
-      padding: 18px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      box-shadow: var(--shadow);
+    .row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .pill {
       display: inline-flex;
       align-items: center;
+      padding: 8px 12px;
       border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 0.82rem;
-      background: rgba(11,122,117,0.12);
-      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(55, 211, 165, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(55, 211, 165, 0.5);
     }
 
-    .status, .empty {
+    .pill.warn {
+      background: rgba(255, 209, 102, 0.15);
+      color: #ffd166;
+      border-color: rgba(255, 209, 102, 0.35);
+    }
+
+    .pill.danger {
+      background: rgba(255, 123, 123, 0.18);
+      color: var(--danger);
+      border-color: rgba(255, 123, 123, 0.35);
+    }
+
+    .helper, .empty {
       color: var(--muted);
-      margin-top: 10px;
       line-height: 1.6;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .form-group {
+      display: grid;
+      gap: 6px;
+    }
+
+    .form-group.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+    }
+
+    textarea {
+      min-height: 104px;
+      resize: vertical;
     }
 
     .hidden { display: none; }
 
-    @media (max-width: 980px) {
-      .grid, .layout { grid-template-columns: 1fr; }
+    @media (max-width: 1040px) {
+      .metrics, .layout, .form-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="container">
     <header>
-      <div class="topbar">
-        <div>
-          <h1>Client Operations</h1>
-          <div class="subtitle" id="tenantSummary">Loading tenant workspace...</div>
-        </div>
-        <div class="actions">
-          <select id="tenantSelect"></select>
-          <button id="refreshBtn">Refresh</button>
-          <button id="signOutBtn" class="primary">Sign Out</button>
-        </div>
+      <div>
+        <h1>PlumbConnect Client Console</h1>
+        <div class="subtitle" id="tenantSummary">Loading the latest tenant lead desk and call records...</div>
       </div>
-      <div class="status" id="status"></div>
+      <div class="actions">
+        <div class="pill" id="workspacePill">Client workspace</div>
+        <select id="tenantSelect"></select>
+        <select id="leadFilter">
+          <option value="open">Open Leads</option>
+          <option value="all">All Leads</option>
+          <option value="archived">Archived Only</option>
+        </select>
+        <button id="exportCsvBtn" class="secondary" type="button">Export CSV</button>
+        <button id="reloadPageBtn" class="secondary" type="button">Reload Page</button>
+        <button id="signOutBtn" class="primary" type="button">Sign Out</button>
+      </div>
     </header>
 
-    <section class="grid">
-      <article class="card"><div class="metric-label">New Leads</div><div class="metric-value" id="metricLeads">0</div></article>
-      <article class="card"><div class="metric-label">Booked Jobs</div><div class="metric-value" id="metricBooked">0</div></article>
-      <article class="card"><div class="metric-label">Calls Logged</div><div class="metric-value" id="metricCalls">0</div></article>
-      <article class="card"><div class="metric-label">Package</div><div class="metric-value" id="metricPackage">Pilot</div></article>
+    <div class="status-line" id="status"></div>
+
+    <section class="metrics">
+      <article class="metric"><div class="metric-label">Open Leads</div><div class="metric-value" id="metricOpen">0</div></article>
+      <article class="metric"><div class="metric-label">Booked</div><div class="metric-value" id="metricBooked">0</div></article>
+      <article class="metric"><div class="metric-label">Callback Queue</div><div class="metric-value" id="metricCallback">0</div></article>
+      <article class="metric"><div class="metric-label">Closed / Archived</div><div class="metric-value" id="metricClosed">0</div></article>
     </section>
 
     <section class="layout">
-      <article class="table-card">
-        <h2>Lead Feed</h2>
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2>Lead List</h2>
+            <div class="helper">Use this table as the working queue. Select a lead to update details, change status, archive it, or delete it after closure.</div>
+          </div>
+          <div class="pill" id="leadCountPill">0 leads</div>
+        </div>
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Phone</th>
+              <th>Created</th>
+              <th>Caller</th>
               <th>Address</th>
               <th>Issue</th>
               <th>Urgency</th>
               <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="leadTable"></tbody>
         </table>
-        <div class="empty hidden" id="leadEmpty">No leads are visible for this tenant yet.</div>
+        <div class="empty hidden" id="leadEmpty">No leads match this filter yet.</div>
       </article>
 
-      <div class="side-stack">
-        <article class="side-card">
-          <h2>Feature Access</h2>
-          <div id="featureFlags"></div>
+      <div class="stack">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h2>Lead Management Panel</h2>
+              <div class="helper">Update lead details before export or resolution. Choosing a closed action will archive or delete the lead.</div>
+            </div>
+            <div class="pill" id="selectedLeadPill">No lead selected</div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="leadName">Caller Name</label>
+              <input id="leadName" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="leadPhone">Phone</label>
+              <input id="leadPhone" type="text" />
+            </div>
+            <div class="form-group full">
+              <label for="leadAddress">Service Address</label>
+              <input id="leadAddress" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="leadServiceType">Service Type</label>
+              <input id="leadServiceType" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="leadUrgency">Urgency</label>
+              <select id="leadUrgency">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="emergency">Emergency</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="leadPreferredDate">Preferred Date</label>
+              <input id="leadPreferredDate" type="text" />
+            </div>
+            <div class="form-group">
+              <label for="leadPreferredTime">Preferred Time</label>
+              <input id="leadPreferredTime" type="text" />
+            </div>
+            <div class="form-group full">
+              <label for="leadIssue">Issue Description</label>
+              <textarea id="leadIssue"></textarea>
+            </div>
+            <div class="form-group full">
+              <label for="leadSummary">Dispatcher Summary</label>
+              <textarea id="leadSummary"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="leadStatusAction">Status / Resolution</label>
+              <select id="leadStatusAction">
+                <option value="new">New</option>
+                <option value="booked">Booked</option>
+                <option value="callback">Callback</option>
+                <option value="declined">Declined</option>
+                <option value="spam">Spam</option>
+                <option value="closed_archive">Closed - Archive</option>
+                <option value="closed_delete">Closed - Delete</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="leadDisposition">Disposition Note</label>
+              <input id="leadDisposition" type="text" />
+            </div>
+            <div class="form-group full">
+              <div class="actions">
+                <button id="saveLeadBtn" class="primary" type="button">Save Lead</button>
+                <button id="archiveLeadBtn" class="secondary" type="button">Archive</button>
+                <button id="deleteLeadBtn" class="danger" type="button">Delete</button>
+              </div>
+              <div class="helper" id="leadFormStatus">Select a lead from the list to edit it.</div>
+            </div>
+          </div>
         </article>
-        <article class="side-card">
-          <h2>Recent Calls</h2>
-          <div id="callList"></div>
+
+        <article class="card">
+          <h2>Month To Date</h2>
+          <div class="helper" id="mtdSummary">Loading the current month's usage snapshot...</div>
         </article>
-        <article class="side-card">
-          <h2>Membership</h2>
-          <div id="memberRole"></div>
+
+        <article class="card">
+          <h2>Export + Queue Notes</h2>
+          <div class="helper" id="exportSummary">CSV export includes the currently visible lead list for the selected tenant. Closed archive removes the lead from the open queue but keeps it available in the archived filter.</div>
         </article>
       </div>
     </section>
@@ -229,8 +408,155 @@
     const SUPABASE_KEY = "sb_publishable_hmYHicDbdl4xpuo5WQ9RLQ_bu24mUdD";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    const tenantSelectEl = document.getElementById("tenantSelect");
+    const leadFilterEl = document.getElementById("leadFilter");
+    const statusEl = document.getElementById("status");
+    const leadTableEl = document.getElementById("leadTable");
+    const leadEmptyEl = document.getElementById("leadEmpty");
+    const leadCountPillEl = document.getElementById("leadCountPill");
+    const selectedLeadPillEl = document.getElementById("selectedLeadPill");
+    const leadFormStatusEl = document.getElementById("leadFormStatus");
+
     let currentMemberships = [];
     let currentClient = null;
+    let currentLeads = [];
+    let selectedLeadId = null;
+    let currentMonthlyUsage = null;
+
+    const leadFieldEls = {
+      caller_name: document.getElementById("leadName"),
+      caller_phone: document.getElementById("leadPhone"),
+      service_address: document.getElementById("leadAddress"),
+      service_type: document.getElementById("leadServiceType"),
+      urgency_level: document.getElementById("leadUrgency"),
+      preferred_date: document.getElementById("leadPreferredDate"),
+      preferred_time: document.getElementById("leadPreferredTime"),
+      issue_description: document.getElementById("leadIssue"),
+      summary: document.getElementById("leadSummary"),
+      disposition: document.getElementById("leadDisposition"),
+      status_action: document.getElementById("leadStatusAction"),
+    };
+
+    function formatDateTime(value) {
+      if (!value) return "Not set";
+      return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    }
+
+    function currentMonthKey() {
+      const now = new Date();
+      return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function normalizePhone(value) {
+      const digits = String(value || "").replace(/\D+/g, "");
+      if (!digits) return null;
+      if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+      return digits;
+    }
+
+    function escapeCsv(value) {
+      const text = String(value ?? "");
+      if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+      return text;
+    }
+
+    function getVisibleLeads() {
+      const filter = leadFilterEl.value;
+      if (filter === "archived") return currentLeads.filter((lead) => lead.disposition === "archived");
+      if (filter === "all") return currentLeads;
+      return currentLeads.filter((lead) => lead.disposition !== "archived");
+    }
+
+    function leadStatusLabel(lead) {
+      if (lead.disposition === "archived") return "archived";
+      return lead.status || "new";
+    }
+
+    function renderMetrics(leads) {
+      const openCount = leads.filter((lead) => lead.disposition !== "archived" && !["declined", "spam"].includes(lead.status || "")).length;
+      const bookedCount = leads.filter((lead) => lead.status === "booked" && lead.disposition !== "archived").length;
+      const callbackCount = leads.filter((lead) => lead.status === "callback" && lead.disposition !== "archived").length;
+      const closedCount = leads.filter((lead) => lead.disposition === "archived" || ["declined", "spam"].includes(lead.status || "")).length;
+
+      document.getElementById("metricOpen").textContent = String(openCount);
+      document.getElementById("metricBooked").textContent = String(bookedCount);
+      document.getElementById("metricCallback").textContent = String(callbackCount);
+      document.getElementById("metricClosed").textContent = String(closedCount);
+    }
+
+    function renderMonthlyUsage() {
+      const usage = currentMonthlyUsage || {
+        total_calls: 0,
+        qualified_leads: 0,
+        booked_jobs: 0,
+        minutes_used: 0,
+        estimated_cost: 0,
+        invoice_amount: 0,
+      };
+
+      document.getElementById("mtdSummary").innerHTML = `
+        <strong>${currentMonthKey()} MTD</strong><br />
+        calls: ${usage.total_calls ?? 0} |
+        leads: ${usage.qualified_leads ?? 0} |
+        booked: ${usage.booked_jobs ?? 0}<br />
+        minutes: ${Number(usage.minutes_used ?? 0).toFixed(1)} |
+        est. cost: $${Number(usage.estimated_cost ?? 0).toFixed(2)} |
+        invoice: $${Number(usage.invoice_amount ?? 0).toFixed(2)}
+      `;
+    }
+
+    function renderLeadTable() {
+      const visibleLeads = getVisibleLeads();
+      leadCountPillEl.textContent = `${visibleLeads.length} leads`;
+      leadTableEl.innerHTML = visibleLeads.map((lead) => `
+        <tr>
+          <td>${formatDateTime(lead.created_at)}</td>
+          <td>
+            <strong>${lead.caller_name || "Unknown caller"}</strong><br />
+            <span class="helper">${lead.caller_phone || "No phone saved"}</span>
+          </td>
+          <td>${lead.service_address || "No address saved"}</td>
+          <td>${lead.issue_description || "No issue saved"}</td>
+          <td><span class="pill ${["high", "emergency"].includes(String(lead.urgency_level || "").toLowerCase()) ? "danger" : "warn"}">${lead.urgency_level || "standard"}</span></td>
+          <td>${leadStatusLabel(lead)}</td>
+          <td><button class="secondary" type="button" data-edit-lead="${lead.id}">Open</button></td>
+        </tr>
+      `).join("");
+
+      leadEmptyEl.classList.toggle("hidden", visibleLeads.length > 0);
+      document.querySelectorAll("[data-edit-lead]").forEach((button) => {
+        button.addEventListener("click", () => selectLead(button.getAttribute("data-edit-lead")));
+      });
+    }
+
+    function populateLeadForm(lead) {
+      if (!lead) {
+        Object.values(leadFieldEls).forEach((field) => field.value = "");
+        selectedLeadPillEl.textContent = "No lead selected";
+        leadFormStatusEl.textContent = "Select a lead from the list to edit it.";
+        return;
+      }
+
+      leadFieldEls.caller_name.value = lead.caller_name || "";
+      leadFieldEls.caller_phone.value = lead.caller_phone || "";
+      leadFieldEls.service_address.value = lead.service_address || "";
+      leadFieldEls.service_type.value = lead.service_type || "";
+      leadFieldEls.urgency_level.value = lead.urgency_level || "medium";
+      leadFieldEls.preferred_date.value = lead.preferred_date || "";
+      leadFieldEls.preferred_time.value = lead.preferred_time || "";
+      leadFieldEls.issue_description.value = lead.issue_description || "";
+      leadFieldEls.summary.value = lead.summary || "";
+      leadFieldEls.disposition.value = lead.disposition || "";
+      leadFieldEls.status_action.value = lead.disposition === "archived" ? "closed_archive" : (lead.status || "new");
+      selectedLeadPillEl.textContent = lead.caller_name || "Selected lead";
+      leadFormStatusEl.textContent = `Editing ${lead.caller_name || "selected lead"}. Save changes when the record is ready for the owner or CRM export.`;
+    }
+
+    function selectLead(leadId) {
+      selectedLeadId = leadId;
+      const lead = currentLeads.find((item) => item.id === leadId) || null;
+      populateLeadForm(lead);
+    }
 
     async function requireSession() {
       const { data } = await supabaseClient.auth.getSession();
@@ -257,133 +583,203 @@
         const clientRes = await supabaseClient
           .from("clients")
           .select("id, tenant_id, business_name, package_tier, feature_flags_json")
-          .in("tenant_id", tenantIds);
+          .in("tenant_id", tenantIds)
+          .eq("active", true);
 
         if (clientRes.error) throw clientRes.error;
         clients = clientRes.data || [];
       }
 
       const clientByTenant = new Map(clients.map((client) => [client.tenant_id, client]));
-      currentMemberships = currentMemberships.map((membership) => ({
-        ...membership,
-        client: clientByTenant.get(membership.tenant_id) || null,
-      }));
+      currentMemberships = currentMemberships
+        .map((membership) => ({
+          ...membership,
+          client: clientByTenant.get(membership.tenant_id) || null,
+        }))
+        .filter((membership) => membership.client);
 
-      const select = document.getElementById("tenantSelect");
-      select.innerHTML = "";
+      tenantSelectEl.innerHTML = "";
       currentMemberships.forEach((membership, index) => {
         const option = document.createElement("option");
-        const tenantName = membership.tenants?.name || membership.client?.business_name || `Tenant ${index + 1}`;
         option.value = membership.tenant_id;
-        option.textContent = tenantName;
-        select.appendChild(option);
+        option.textContent = membership.client?.business_name || membership.tenants?.name || `Tenant ${index + 1}`;
+        tenantSelectEl.appendChild(option);
       });
 
       if (!currentMemberships.length) {
-        document.getElementById("status").textContent = "Signed in, but no tenant membership was found yet.";
+        statusEl.textContent = "Signed in, but no tenant membership was found yet.";
       }
-    }
-
-    function renderFeatures(flags = {}) {
-      const container = document.getElementById("featureFlags");
-      const entries = Object.entries(flags);
-      if (!entries.length) {
-        container.innerHTML = '<div class="empty">No feature flags saved for this tenant yet.</div>';
-        return;
-      }
-      container.innerHTML = entries.map(([key, enabled]) => {
-        const label = key.replace(/_/g, " ");
-        return `<div class="status"><span class="pill">${enabled ? "Enabled" : "Disabled"}</span> ${label}</div>`;
-      }).join("");
-    }
-
-    function renderCalls(calls = []) {
-      const container = document.getElementById("callList");
-      if (!calls.length) {
-        container.innerHTML = '<div class="empty">No recent calls yet.</div>';
-        return;
-      }
-      container.innerHTML = calls.map((call) => `
-        <div class="status">
-          <strong>${call.call_outcome || call.ended_reason || "completed"}</strong><br />
-          ${call.summary || "No summary captured yet."}
-        </div>
-      `).join("");
-    }
-
-    function renderLeads(leads = []) {
-      const table = document.getElementById("leadTable");
-      const empty = document.getElementById("leadEmpty");
-      table.innerHTML = leads.map((lead) => `
-        <tr>
-          <td>${lead.caller_name || ""}</td>
-          <td>${lead.caller_phone || ""}</td>
-          <td>${lead.service_address || ""}</td>
-          <td>${lead.issue_description || ""}</td>
-          <td>${lead.urgency_level || ""}</td>
-          <td>${lead.status || ""}</td>
-        </tr>
-      `).join("");
-      empty.classList.toggle("hidden", leads.length > 0);
     }
 
     async function loadTenantData() {
-      const tenantId = document.getElementById("tenantSelect").value;
+      const tenantId = tenantSelectEl.value;
       const membership = currentMemberships.find((item) => item.tenant_id === tenantId);
       currentClient = membership?.client || null;
+      if (!tenantId || !currentClient) return;
 
-      if (!tenantId) return;
+      document.getElementById("tenantSummary").textContent = `${currentClient.business_name} | ${membership?.role || "member"} | Refresh this page any time to confirm the newest records.`;
+      document.getElementById("workspacePill").textContent = `${membership?.role || "client member"} | tenant-scoped access`;
+      statusEl.textContent = "Loading leads...";
 
-      document.getElementById("memberRole").innerHTML = `
-        <div class="status"><span class="pill">${membership?.role || "member"}</span> ${membership?.tenants?.name || currentClient?.business_name || "Tenant"}</div>
-      `;
-      document.getElementById("tenantSummary").textContent = `${currentClient?.business_name || membership?.tenants?.name || "Tenant"} | ${membership?.role || "member"}`;
-      document.getElementById("metricPackage").textContent = (currentClient?.package_tier || membership?.tenants?.package_tier || "pilot").replace("_", " ");
-      renderFeatures(currentClient?.feature_flags_json || {});
-
-      const [leadRes, callRes] = await Promise.all([
+      const monthKey = currentMonthKey();
+      const [leadRes, usageRes] = await Promise.all([
         supabaseClient
           .from("leads")
-          .select("caller_name, caller_phone, service_address, issue_description, urgency_level, status", { count: "exact" })
+          .select("id, tenant_id, caller_name, caller_phone, service_address, issue_description, service_type, urgency_level, preferred_date, preferred_time, status, disposition, summary, created_at")
           .eq("tenant_id", tenantId)
           .order("created_at", { ascending: false })
-          .limit(12),
+          .limit(200),
         supabaseClient
-          .from("calls")
-          .select("summary, call_outcome, ended_reason", { count: "exact" })
-          .eq("tenant_id", tenantId)
-          .order("created_at", { ascending: false })
-          .limit(5)
+          .from("monthly_usage")
+          .select("client_id, month_key, total_calls, qualified_leads, booked_jobs, minutes_used, estimated_cost, invoice_amount")
+          .eq("client_id", currentClient.id)
+          .eq("month", monthKey)
+          .maybeSingle()
       ]);
 
       if (leadRes.error) throw leadRes.error;
-      if (callRes.error) throw callRes.error;
+      if (usageRes.error) throw usageRes.error;
+      currentLeads = leadRes.data || [];
+      currentMonthlyUsage = usageRes.data || null;
+      renderMetrics(currentLeads);
+      renderMonthlyUsage();
+      renderLeadTable();
 
-      const leads = leadRes.data || [];
-      const calls = callRes.data || [];
-      renderLeads(leads);
-      renderCalls(calls);
+      if (!selectedLeadId || !currentLeads.some((lead) => lead.id === selectedLeadId)) {
+        selectedLeadId = currentLeads[0]?.id || null;
+      }
+      populateLeadForm(currentLeads.find((lead) => lead.id === selectedLeadId) || null);
+      document.getElementById("exportSummary").textContent = `CSV export is ready for ${currentClient.business_name}. Visible leads: ${getVisibleLeads().length}.`;
+      statusEl.textContent = "";
+    }
 
-      document.getElementById("metricLeads").textContent = String(leads.filter((lead) => lead.status === "new").length);
-      document.getElementById("metricBooked").textContent = String(leads.filter((lead) => lead.status === "booked").length);
-      document.getElementById("metricCalls").textContent = String(callRes.count || calls.length || 0);
-      document.getElementById("status").textContent = "";
+    async function saveLead(actionOverride = null) {
+      const lead = currentLeads.find((item) => item.id === selectedLeadId);
+      if (!lead) {
+        leadFormStatusEl.textContent = "Select a lead first.";
+        return;
+      }
+
+      const statusAction = actionOverride || leadFieldEls.status_action.value;
+      if (statusAction === "closed_delete") {
+        const confirmed = window.confirm(`Delete ${lead.caller_name || "this lead"}? This cannot be undone.`);
+        if (!confirmed) return;
+
+        const { error } = await supabaseClient
+          .from("leads")
+          .delete()
+          .eq("id", lead.id);
+
+        if (error) throw error;
+
+        currentLeads = currentLeads.filter((item) => item.id !== lead.id);
+        selectedLeadId = currentLeads[0]?.id || null;
+        renderMetrics(currentLeads);
+        renderLeadTable();
+        populateLeadForm(currentLeads.find((item) => item.id === selectedLeadId) || null);
+        leadFormStatusEl.textContent = "Lead deleted.";
+        return;
+      }
+
+      const payload = {
+        caller_name: leadFieldEls.caller_name.value.trim() || null,
+        caller_phone: normalizePhone(leadFieldEls.caller_phone.value),
+        service_address: leadFieldEls.service_address.value.trim() || null,
+        service_type: leadFieldEls.service_type.value.trim() || null,
+        urgency_level: leadFieldEls.urgency_level.value,
+        preferred_date: leadFieldEls.preferred_date.value.trim() || null,
+        preferred_time: leadFieldEls.preferred_time.value.trim() || null,
+        issue_description: leadFieldEls.issue_description.value.trim() || null,
+        summary: leadFieldEls.summary.value.trim() || null,
+        disposition: leadFieldEls.disposition.value.trim() || null,
+        status: statusAction,
+      };
+
+      if (statusAction === "closed_archive") {
+        payload.status = "declined";
+        payload.disposition = "archived";
+      } else {
+        payload.disposition = payload.disposition === "archived" ? null : payload.disposition;
+      }
+
+      const { data, error } = await supabaseClient
+        .from("leads")
+        .update(payload)
+        .eq("id", lead.id)
+        .select("id, tenant_id, caller_name, caller_phone, service_address, issue_description, service_type, urgency_level, preferred_date, preferred_time, status, disposition, summary, created_at")
+        .single();
+
+      if (error) throw error;
+
+      const index = currentLeads.findIndex((item) => item.id === lead.id);
+      if (index >= 0) currentLeads[index] = data;
+      renderMetrics(currentLeads);
+      renderLeadTable();
+      selectLead(data.id);
+      leadFormStatusEl.textContent = statusAction === "closed_archive" ? "Lead archived." : "Lead updated.";
+    }
+
+    function exportVisibleLeadsCsv() {
+      const rows = getVisibleLeads();
+      const header = [
+        "created_at",
+        "caller_name",
+        "caller_phone",
+        "service_address",
+        "service_type",
+        "issue_description",
+        "urgency_level",
+        "preferred_date",
+        "preferred_time",
+        "status",
+        "disposition",
+        "summary"
+      ];
+
+      const csv = [
+        header.join(","),
+        ...rows.map((lead) => header.map((key) => escapeCsv(lead[key])).join(","))
+      ].join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const businessSlug = (currentClient?.business_name || "tenant").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      link.href = url;
+      link.download = `${businessSlug}-leads-${leadFilterEl.value}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      statusEl.textContent = `Exported ${rows.length} leads to CSV.`;
     }
 
     async function init() {
       try {
         await requireSession();
         await loadMemberships();
-        if (currentMemberships.length) {
-          await loadTenantData();
-        }
+        if (currentMemberships.length) await loadTenantData();
       } catch (error) {
-        document.getElementById("status").textContent = error.message;
+        statusEl.textContent = error.message;
       }
     }
 
-    document.getElementById("tenantSelect").addEventListener("change", loadTenantData);
-    document.getElementById("refreshBtn").addEventListener("click", loadTenantData);
+    tenantSelectEl.addEventListener("change", () => {
+      selectedLeadId = null;
+      loadTenantData().catch((error) => { statusEl.textContent = error.message; });
+    });
+
+    leadFilterEl.addEventListener("change", () => {
+      renderLeadTable();
+      document.getElementById("exportSummary").textContent = `CSV export is ready for ${currentClient?.business_name || "this tenant"}. Visible leads: ${getVisibleLeads().length}.`;
+    });
+
+    document.getElementById("reloadPageBtn").addEventListener("click", () => {
+      window.location.reload();
+    });
+
+    document.getElementById("exportCsvBtn").addEventListener("click", exportVisibleLeadsCsv);
+    document.getElementById("saveLeadBtn").addEventListener("click", () => saveLead().catch((error) => { leadFormStatusEl.textContent = error.message; }));
+    document.getElementById("archiveLeadBtn").addEventListener("click", () => saveLead("closed_archive").catch((error) => { leadFormStatusEl.textContent = error.message; }));
+    document.getElementById("deleteLeadBtn").addEventListener("click", () => saveLead("closed_delete").catch((error) => { leadFormStatusEl.textContent = error.message; }));
     document.getElementById("signOutBtn").addEventListener("click", async () => {
       await supabaseClient.auth.signOut();
       window.location.href = "login.html";

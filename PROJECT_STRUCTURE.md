@@ -39,17 +39,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-pages-deploy.ps1
   - Non-code business/reference files such as spreadsheets and PDFs
   - Kept out of the project root to reduce deployment noise
 
+- `docs/`
+  - Planning, cleanup, support, and secret-handling notes
+
 ## Current Frontend Routing Rule
 
 - Prefer editing these canonical pages:
   - `dashboard/index.html`
   - `dashboard/login.html`
-  - `dashboard/admin-dashboard.html`
+  - `dashboard/admin_management.html`
   - `dashboard/client-dashboard.html`
   - `dashboard/new-plumbing-business-form.html`
 
 - Short routes are handled only in `dashboard/_redirects`:
-  - `/admin` -> `/admin-dashboard`
+  - `/admin` -> `/admin_management`
   - `/client` -> `/client-dashboard`
   - `/onboarding` -> `/new-plumbing-business-form`
 

@@ -6,7 +6,7 @@ Cloudflare Pages preview/live host:
 - `https://plumbing-ai-receptionist.pages.dev/`
 
 Recommended final custom domain:
-- `https://returnfromtheveil.online/`
+- `https://pipescheduler.com/`
 
 ## Publish Directory
 
@@ -17,7 +17,7 @@ Source files live in `dashboard/`.
 Deploy bundle includes:
 - `index.html`
 - `login.html`
-- `admin-dashboard.html`
+- `admin_management.html`
 - `client-dashboard.html`
 - `new-plumbing-business-form.html`
 - `_redirects`
@@ -35,7 +35,7 @@ Cloudflare Pages should now support these friendly routes through `_redirects`:
 They map to:
 - `/index.html`
 - `/login`
-- `/admin-dashboard`
+- `/admin_management`
 - `/client-dashboard`
 - `/new-plumbing-business-form`
 
@@ -50,36 +50,36 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-pages-deploy.ps1
 Add all of these in Supabase Dashboard -> Authentication -> URL Configuration.
 
 Production/custom domain:
-- `https://returnfromtheveil.online/login.html`
-- `https://returnfromtheveil.online/admin-dashboard.html`
-- `https://returnfromtheveil.online/client-dashboard.html`
-- `https://returnfromtheveil.online/login`
-- `https://returnfromtheveil.online/admin`
-- `https://returnfromtheveil.online/client`
-- `https://returnfromtheveil.online/admin-dashboard`
-- `https://returnfromtheveil.online/client-dashboard`
-- `https://returnfromtheveil.online/new-plumbing-business-form`
+- `https://pipescheduler.com/login.html`
+- `https://pipescheduler.com/admin_management.html`
+- `https://pipescheduler.com/client-dashboard.html`
+- `https://pipescheduler.com/login`
+- `https://pipescheduler.com/admin`
+- `https://pipescheduler.com/client`
+- `https://pipescheduler.com/admin_management`
+- `https://pipescheduler.com/client-dashboard`
+- `https://pipescheduler.com/new-plumbing-business-form`
 
 Cloudflare Pages domain:
 - `https://plumbing-ai-receptionist.pages.dev/login.html`
-- `https://plumbing-ai-receptionist.pages.dev/admin-dashboard.html`
+- `https://plumbing-ai-receptionist.pages.dev/admin_management.html`
 - `https://plumbing-ai-receptionist.pages.dev/client-dashboard.html`
 - `https://plumbing-ai-receptionist.pages.dev/login`
 - `https://plumbing-ai-receptionist.pages.dev/admin`
 - `https://plumbing-ai-receptionist.pages.dev/client`
-- `https://plumbing-ai-receptionist.pages.dev/admin-dashboard`
+- `https://plumbing-ai-receptionist.pages.dev/admin_management`
 - `https://plumbing-ai-receptionist.pages.dev/client-dashboard`
 - `https://plumbing-ai-receptionist.pages.dev/new-plumbing-business-form`
 
 Local development:
 - `http://localhost:5500/dashboard/login.html`
-- `http://localhost:5500/dashboard/admin-dashboard.html`
+- `http://localhost:5500/dashboard/admin_management.html`
 - `http://localhost:5500/dashboard/client-dashboard.html`
 
 ## Cloudflare Domain Step
 
 In Cloudflare Pages:
-- add `returnfromtheveil.online` as a custom domain
+- add `pipescheduler.com` as a custom domain
 - let Cloudflare create the DNS records it requests
 - wait for SSL to issue
 
@@ -90,5 +90,5 @@ Use these once deployed:
 - Client login: `https://plumbing-ai-receptionist.pages.dev/login?dest=client`
 
 After custom domain is attached:
-- Agency admin: `https://returnfromtheveil.online/login?dest=admin`
-- Client login: `https://returnfromtheveil.online/login?dest=client`
+- Agency admin: `https://pipescheduler.com/login?dest=admin`
+- Client login: `https://pipescheduler.com/login?dest=client`

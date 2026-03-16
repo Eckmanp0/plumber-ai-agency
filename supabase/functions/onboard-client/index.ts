@@ -9,6 +9,12 @@ type SheetProvisionResult = {
   routeCreated: boolean;
 };
 
+type ServiceCatalogEntry = {
+  id: string;
+  service_key: string;
+  service_name: string;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -26,6 +32,17 @@ function jsonResponse(body: unknown, status = 200) {
 
 function getString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getStringFrom(obj: unknown, keys: string[]): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  const json = obj as Json;
+  for (const key of keys) {
+    const value = json[key];
+    const result = getString(value);
+    if (result) return result;
+  }
+  return null;
 }
 
 function getPackageTier(value: unknown): "pilot" | "full_service" {
@@ -64,12 +81,319 @@ function slugify(value: string): string {
     .slice(0, 40);
 }
 
+function monthKeyFrom(date = new Date()): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function truncateAssistantName(value: string): string {
   return `Desk ${value}`.slice(0, 40);
 }
 
 function shouldProvisionDedicatedAssistant(value: unknown): boolean {
   return value === true;
+}
+
+function normalizePhone(value: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return null;
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
+
+function normalizeServiceKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function titleizeService(value: string): string {
+  return value
+    .split(/[_\s-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatServiceAreaText(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "not yet specified";
+  const parts = value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Json;
+    const city = getStringFrom(item, ["city"]);
+    const county = getStringFrom(item, ["county"]);
+    const zip = getStringFrom(item, ["zip_code", "zip"]);
+    if (city && county) return [`${city}, ${county} County`];
+    if (city && zip) return [`${city} (${zip})`];
+    if (city) return [city];
+    if (county) return [`${county} County`];
+    if (zip) return [`ZIP ${zip}`];
+    return [];
+  });
+  return parts.length ? parts.join(", ") : "not yet specified";
+}
+
+function formatServicesText(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "general plumbing service";
+  const services = value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+  return services.length ? services.join(", ") : "general plumbing service";
+}
+
+function formatHoursText(value: unknown): string {
+  if (!value || typeof value !== "object") return "not yet specified";
+  const order = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const labels: Record<string, string> = {
+    mon: "Mon",
+    tue: "Tue",
+    wed: "Wed",
+    thu: "Thu",
+    fri: "Fri",
+    sat: "Sat",
+    sun: "Sun",
+  };
+  const json = value as Json;
+  const parts = order
+    .map((key) => {
+      const raw = getStringFrom(json, [key]);
+      return raw ? `${labels[key]} ${raw}` : null;
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join("; ") : "not yet specified";
+}
+
+function formatBookingRulesText(value: unknown): string {
+  if (!value || typeof value !== "object") return "Follow business rules and collect a callback window when uncertain.";
+  const rules = value as Json;
+  const fragments: string[] = [];
+  const sameDay = rules.same_day_allowed === true ? "same-day allowed" : rules.same_day_allowed === false ? "same-day not allowed" : null;
+  if (sameDay) fragments.push(sameDay);
+
+  if (Array.isArray(rules.default_slots) && rules.default_slots.length > 0) {
+    const slots = rules.default_slots
+      .map((slot) => {
+        if (!slot || typeof slot !== "object") return null;
+        const slotJson = slot as Json;
+        const label = getStringFrom(slotJson, ["label"]);
+        const date = getStringFrom(slotJson, ["date"]);
+        const time = getStringFrom(slotJson, ["time"]);
+        return [label, date, time].filter(Boolean).join(" ");
+      })
+      .filter(Boolean);
+    if (slots.length) fragments.push(`default windows: ${slots.join(", ")}`);
+  }
+
+  const defaultJobValue = rules.default_job_value;
+  if (typeof defaultJobValue === "number") {
+    fragments.push(`default job value ${defaultJobValue}`);
+  }
+
+  return fragments.length
+    ? fragments.join("; ")
+    : "Follow business rules and collect a callback window when uncertain.";
+}
+
+function buildReceptionistPrompt(args: {
+  businessName: string;
+  hoursText: string;
+  serviceAreaText: string;
+  servicesText: string;
+  bookingRulesText: string;
+  bookingMode: string;
+  emergencyEnabled: boolean;
+}): string {
+  return [
+    `You are a professional receptionist for a plumbing company named ${args.businessName}.`,
+    `Hours of operation are ${args.hoursText}.`,
+    `Service area for ${args.businessName} is ${args.serviceAreaText}.`,
+    `Services commonly offered are ${args.servicesText}.`,
+    `Emergency service is ${args.emergencyEnabled ? "enabled" : "disabled"}.`,
+    `Scheduling and callback rules are: ${args.bookingRulesText}.`,
+    `Current booking mode is ${args.bookingMode}.`,
+    "Your job is to answer incoming calls from potential customers, understand their plumbing issue, determine urgency, collect customer information, and help schedule service appointments when possible.",
+    "Always remain calm, polite, efficient, and grounded in the business information you have been given.",
+    "Your goals are to identify the plumbing issue, determine urgency, collect caller details, capture service location, determine service eligibility, schedule an appointment if possible, and log the call outcome truthfully.",
+    "Never diagnose plumbing problems or give repair instructions.",
+    "Never quote prices unless pricing has been explicitly provided by the business.",
+    "If the caller describes active flooding, burst pipes, sewer backup, or major leaks, classify the issue as HIGH URGENCY.",
+    "If the caller is outside the service area, politely explain that the company may not serve that location.",
+    "If scheduling is not possible, collect preferred appointment times and treat the outcome as callback required.",
+    "Always confirm the caller's name, phone number, service address, issue, and next step before ending the call.",
+    "Required information to gather before closing whenever possible: caller name, phone number, service address, description of problem, urgency level, requested service type, and preferred appointment time.",
+    "Default conversation flow: greeting, qualification, urgency check, information collection, scheduling or callback, confirmation, and closing.",
+    "Example phrasing: 'Thank you for calling {{business_name}}, how can I help you today?', 'What seems to be the plumbing issue you're experiencing?', 'Is water currently leaking or causing damage?', 'May I get your name and the address where the service is needed?', 'The next available appointment windows are tomorrow morning or tomorrow afternoon. Which works better?', 'Just to confirm, I have you at [address] for [issue] at [time]. Is that correct?', 'Great. We'll send this request to the plumber and they'll confirm shortly.'",
+    "Edge cases to handle carefully: out-of-area, unsupported service, caller refuses the service address, caller only wants a price quote, caller is calling for another property, repeat caller checking status, caller is too upset to finish intake, or no scheduling slots are available.",
+    "Do not hallucinate. Use callback_required or the closest truthful outcome and gather as much usable information as possible.",
+    "Use the available tools whenever you need to check serviceability, check availability, or create the lead or booking record.",
+  ].join(" ");
+}
+
+function buildSharedAssistantVariableValues(client: Json, tenantId: string): Json {
+  return {
+    tenant_id: getStringFrom(client, ["tenant_id"]) ?? tenantId,
+    client_id: getStringFrom(client, ["id"]),
+    business_name: getStringFrom(client, ["business_name"]) ?? "Plumbing company",
+    hours_text: formatHoursText(client.hours_json),
+    service_area_text: formatServiceAreaText(client.service_area_json),
+    services_text: formatServicesText(client.services_json),
+    booking_rules_text: formatBookingRulesText(client.booking_rules_json),
+    emergency_service_text: client.emergency_enabled === true ? "enabled" : "disabled",
+  };
+}
+
+async function syncTenantSettings(
+  supabase: ReturnType<typeof createClient>,
+  args: {
+    tenantId: string;
+    businessName: string;
+    phone: string | null;
+    email: string | null;
+    emergencyEnabled: boolean;
+    sameDayService: boolean;
+    hoursJson: Json;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from("tenants")
+    .update({
+      name: args.businessName,
+      business_name: args.businessName,
+      phone: args.phone,
+      email: args.email,
+      emergency_enabled: args.emergencyEnabled,
+      same_day_service: args.sameDayService,
+      hours_json: args.hoursJson,
+    })
+    .eq("id", args.tenantId);
+
+  if (error) throw new Error(error.message);
+}
+
+async function syncPhoneNumberMapping(
+  supabase: ReturnType<typeof createClient>,
+  args: {
+    tenantId: string;
+    clientId: string;
+    number: string | null;
+    vapiPhoneNumberId: string | null;
+    active: boolean;
+  },
+): Promise<void> {
+  if (!args.number && !args.vapiPhoneNumberId) return;
+
+  const normalizedNumber = normalizePhone(args.number);
+  const { error } = await supabase
+    .from("phone_numbers")
+    .upsert({
+      tenant_id: args.tenantId,
+      client_id: args.clientId,
+      number: normalizedNumber,
+      vapi_phone_number_id: args.vapiPhoneNumberId,
+      active: args.active,
+    }, { onConflict: normalizedNumber ? "number" : "vapi_phone_number_id" });
+
+  if (error) throw new Error(error.message);
+}
+
+async function syncTenantServiceCatalog(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  services: string[],
+): Promise<Array<{ service_key: string; service_name: string }>> {
+  const cleanedServices = services
+    .map((service) => String(service ?? "").trim())
+    .filter(Boolean);
+
+  if (cleanedServices.length === 0) return [];
+
+  const catalogUpserts = cleanedServices.map((service) => ({
+    service_key: normalizeServiceKey(service),
+    service_name: titleizeService(service),
+    category: "general",
+    emergency_possible: false,
+    active: true,
+  }));
+
+  const upsertCatalog = await supabase
+    .from("service_catalog")
+    .upsert(catalogUpserts, { onConflict: "service_key" })
+    .select("id, service_key, service_name");
+
+  if (upsertCatalog.error) throw new Error(upsertCatalog.error.message);
+
+  const catalogEntries = Array.isArray(upsertCatalog.data)
+    ? upsertCatalog.data as ServiceCatalogEntry[]
+    : [];
+
+  if (catalogEntries.length === 0) return [];
+
+  const mappedRows = catalogEntries.map((entry, index) => ({
+    tenant_id: tenantId,
+    service_id: entry.id,
+    enabled: true,
+    priority: index + 1,
+  }));
+
+  const upsertMappings = await supabase
+    .from("tenant_services")
+    .upsert(mappedRows, { onConflict: "tenant_id,service_id" });
+
+  if (upsertMappings.error) throw new Error(upsertMappings.error.message);
+
+  return catalogEntries.map((entry) => ({
+    service_key: entry.service_key,
+    service_name: entry.service_name,
+  }));
+}
+
+async function syncTenantServiceAreas(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  serviceArea: Array<Record<string, string>>,
+): Promise<void> {
+  if (serviceArea.length === 0) return;
+
+  const upserts = serviceArea.map((entry) => ({
+    tenant_id: tenantId,
+    county: getStringFrom(entry, ["county"]),
+    city: getStringFrom(entry, ["city"]),
+    zip_code: getStringFrom(entry, ["zip_code", "zip"]),
+    active: true,
+  }));
+
+  const { error } = await supabase
+    .from("tenant_service_areas")
+    .insert(upserts);
+
+  if (error) throw new Error(error.message);
+}
+
+async function seedMonthlyUsage(
+  supabase: ReturnType<typeof createClient>,
+  args: {
+    tenantId: string;
+    clientId: string;
+  },
+): Promise<void> {
+  const monthKey = monthKeyFrom();
+  const { error } = await supabase
+    .from("monthly_usage")
+    .upsert({
+      tenant_id: args.tenantId,
+      client_id: args.clientId,
+      month_key: monthKey,
+      month: monthKey,
+      total_calls: 0,
+      qualified_leads: 0,
+      booked_jobs: 0,
+      minutes_used: 0,
+      estimated_cost: 0,
+      invoice_amount: 0,
+    }, { onConflict: "client_id,month" });
+
+  if (error) throw new Error(error.message);
 }
 
 function getSharedAssistantId(packageTier: "pilot" | "full_service"): string | null {
@@ -245,7 +569,7 @@ async function provisionTenantSheet(
 async function createDedicatedAssistant(args: {
   supabaseUrl: string;
   vapiApiKey: string;
-  voiceId: string | undefined;
+  voiceConfig: Json;
   toolServiceability: string | undefined;
   toolAvailability: string | undefined;
   toolLead: string | undefined;
@@ -255,8 +579,17 @@ async function createDedicatedAssistant(args: {
   packageTier: "pilot" | "full_service";
   bookingMode: string;
   featureFlags: Json;
+  emergencyEnabled: boolean;
 }): Promise<string> {
-  const systemPrompt = `You are the professional receptionist for ${args.client.business_name}. Service areas: ${JSON.stringify(args.client.service_area_json)}. Services: ${JSON.stringify(args.client.services_json)}. Business hours: ${JSON.stringify(args.client.hours_json)}. Emergency enabled: ${args.client.emergency_enabled}. Booking mode: ${args.bookingMode}. Package tier: ${args.packageTier}. Feature flags: ${JSON.stringify(args.featureFlags)}. Booking rules: ${JSON.stringify(args.client.booking_rules_json)}. Always collect name, phone, service address, issue description, urgency, and preferred appointment time.`;
+  const systemPrompt = buildReceptionistPrompt({
+    businessName: String(args.client.business_name ?? "the plumbing company"),
+    hoursText: formatHoursText(args.client.hours_json),
+    serviceAreaText: formatServiceAreaText(args.client.service_area_json),
+    servicesText: formatServicesText(args.client.services_json),
+    bookingRulesText: formatBookingRulesText(args.client.booking_rules_json),
+    bookingMode: args.bookingMode.replace(/_/g, " "),
+    emergencyEnabled: args.emergencyEnabled,
+  });
 
   const assistantPayload = {
     name: truncateAssistantName(String(args.client.business_name ?? "Plumbing Desk")),
@@ -275,10 +608,7 @@ async function createDedicatedAssistant(args: {
         },
       ],
     },
-    voice: {
-      provider: "vapi",
-      voiceId: args.voiceId,
-    },
+    voice: args.voiceConfig,
     artifactPlan: {
       structuredOutputIds: args.structuredOutputId ? [args.structuredOutputId] : [],
     },
@@ -314,6 +644,10 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const vapiApiKey = Deno.env.get("VAPI_API_KEY");
   const voiceId = Deno.env.get("VAPI_VOICE_ID");
+  const voiceProvider = Deno.env.get("VAPI_VOICE_PROVIDER") ?? "vapi";
+  const voiceModel = Deno.env.get("VAPI_VOICE_MODEL");
+  const fallbackVoiceId = Deno.env.get("VAPI_FALLBACK_VOICE_ID");
+  const fallbackVoiceProvider = Deno.env.get("VAPI_FALLBACK_VOICE_PROVIDER") ?? "vapi";
   const toolServiceability = Deno.env.get("VAPI_TOOL_ID_CHECK_SERVICEABILITY");
   const toolAvailability = Deno.env.get("VAPI_TOOL_ID_CHECK_AVAILABILITY");
   const toolLead = Deno.env.get("VAPI_TOOL_ID_CREATE_LEAD_OR_BOOKING");
@@ -321,6 +655,26 @@ serve(async (req) => {
 
   if (!supabaseUrl || !serviceRoleKey || !vapiApiKey) {
     return jsonResponse({ error: "Missing required environment variables." }, 500);
+  }
+
+  const voiceConfig: Json = {
+    provider: voiceProvider,
+    voiceId,
+  };
+  if (voiceModel) voiceConfig.model = voiceModel;
+  if (voiceProvider === "11labs") {
+    voiceConfig.stability = 0.5;
+    voiceConfig.similarityBoost = 0.75;
+  }
+  if (fallbackVoiceId) {
+    voiceConfig.fallbackPlan = {
+      voices: [
+        {
+          provider: fallbackVoiceProvider,
+          voiceId: fallbackVoiceId,
+        },
+      ],
+    };
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -335,13 +689,18 @@ serve(async (req) => {
   }
 
   const cities = Array.isArray(body.cities) ? body.cities : [];
+  const counties = Array.isArray(body.counties) ? body.counties : [];
   const zips = Array.isArray(body.zips) ? body.zips : [];
-  const services = Array.isArray(body.services) ? body.services : [];
+  const services = Array.isArray(body.services) ? body.services.map((service) => String(service)) : [];
   const packageTier = getPackageTier(body.package_tier);
   const featureFlags = buildFeatureFlags(packageTier, body.feature_flags_json);
+  const hoursJson = body.hours_json && typeof body.hours_json === "object" ? body.hours_json as Json : {};
+  const emergencyEnabled = body.emergency_enabled === true;
+  const sameDayAllowed = body.same_day_allowed === true;
   const serviceArea = [
     ...cities.map((city) => ({ city: String(city) })),
-    ...zips.map((zip) => ({ zip: String(zip) })),
+    ...counties.map((county) => ({ county: String(county) })),
+    ...zips.map((zip) => ({ zip_code: String(zip) })),
   ];
 
   const businessName = getString(body.business_name);
@@ -363,9 +722,9 @@ serve(async (req) => {
     notification_email: getString(body.notification_email),
     service_area_json: serviceArea,
     services_json: services,
-    hours_json: body.hours_json && typeof body.hours_json === "object" ? body.hours_json : {},
-    emergency_enabled: body.emergency_enabled === true,
-    same_day_allowed: body.same_day_allowed === true,
+    hours_json: hoursJson,
+    emergency_enabled: emergencyEnabled,
+    same_day_allowed: sameDayAllowed,
     urgent_alert_phone: getString(body.urgent_alert_phone),
     reports_email: getString(body.reports_email),
     booking_mode: body.booking_mode === "calendar_direct" ? "calendar_direct" : "request_only",
@@ -384,6 +743,37 @@ serve(async (req) => {
 
   if (error || !client) {
     return jsonResponse({ error: error?.message ?? "Failed to create client" }, 500);
+  }
+
+  try {
+    await syncTenantSettings(supabase, {
+      tenantId,
+      businessName,
+      phone: insertPayload.phone,
+      email: insertPayload.email,
+      emergencyEnabled,
+      sameDayService: sameDayAllowed,
+      hoursJson,
+    });
+    await syncTenantServiceCatalog(supabase, tenantId, services);
+    await syncTenantServiceAreas(supabase, tenantId, serviceArea);
+    await syncPhoneNumberMapping(supabase, {
+      tenantId,
+      clientId: String(client.id),
+      number: insertPayload.phone,
+      vapiPhoneNumberId: getString(body.vapi_phone_number_id),
+      active: true,
+    });
+    await seedMonthlyUsage(supabase, {
+      tenantId,
+      clientId: String(client.id),
+    });
+  } catch (syncError) {
+    return jsonResponse({
+      error: "Client created but tenant service mappings failed.",
+      client,
+      detail: syncError instanceof Error ? syncError.message : "Unknown sync error",
+    }, 500);
   }
 
   let sheetProvision: SheetProvisionResult | null = null;
@@ -415,7 +805,7 @@ serve(async (req) => {
       assistantId = await createDedicatedAssistant({
         supabaseUrl,
         vapiApiKey,
-        voiceId,
+        voiceConfig,
         toolServiceability,
         toolAvailability,
         toolLead,
@@ -425,6 +815,7 @@ serve(async (req) => {
         packageTier,
         bookingMode,
         featureFlags: (client.feature_flags_json as Json) ?? featureFlags,
+        emergencyEnabled,
       });
       assistantMode = "dedicated";
     } catch (assistantError) {
@@ -445,6 +836,8 @@ serve(async (req) => {
     .update({ vapi_assistant_id: assistantId })
     .eq("id", client.id);
 
+  const runtimeVariableValues = buildSharedAssistantVariableValues(client as Json, tenantId);
+
   return jsonResponse({
     ok: true,
     client_id: client.id,
@@ -456,10 +849,11 @@ serve(async (req) => {
     assistant_warning: assistantWarning,
     google_sheet_id: sheetProvision?.spreadsheetId ?? client.google_sheet_id ?? null,
     client_sheet_route_created: sheetProvision?.routeCreated ?? false,
+    shared_assistant_runtime_variables: runtimeVariableValues,
     sheet_warning: sheetWarning,
     followup_warning: followupWarning,
     next_step: assistantMode === "shared"
-      ? "Assign the business phone number to the shared assistant and make sure the number injects client_id/tenant_id at runtime."
+      ? "Assign the business phone number to the shared assistant and inject the returned shared_assistant_runtime_variables at runtime."
       : "Assign or create a Vapi phone number and connect it to this dedicated assistant.",
   });
 });
